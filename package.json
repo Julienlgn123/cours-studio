@@ -9,7 +9,8 @@
     "preview": "electron-vite preview",
     "start": "electron-vite dev",
     "dist": "electron-vite build && electron-builder --win",
-    "dist:portable": "electron-vite build && electron-builder --win portable"
+    "dist:portable": "electron-vite build && electron-builder --win portable",
+    "dist:mac": "electron-vite build && electron-builder --mac"
   },
   "build": {
     "appId": "com.cours-studio.app",
@@ -56,6 +57,19 @@
     },
     "portable": {
       "artifactName": "Cours-Studio-Portable.exe"
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "resources/icon.png",
+      "category": "public.app-category.education",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Cours Studio",
+      "artifactName": "Cours-Studio-${version}-${arch}.dmg"
     },
     "asar": true,
     "asarUnpack": [

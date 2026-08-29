@@ -1,0 +1,125 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Allow native scripts
+        run: |
+          npm approve-scripts better-sqlite3
+          npm approve-scripts electron
+          npm approve-scripts esbuild
+          npm approve-scripts ffmpeg-static
+          npm approve-scripts electron-winstaller
+
+      - name: Build Windows
+        run: npm run dist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: |
+            dist-installer/*.exe
+            dist-installer/*.yml
+            dist-installer/*.blockmap
+
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Allow native scripts
+        run: |
+          npm approve-scripts better-sqlite3 || true
+          npm approve-scripts electron || true
+          npm approve-scripts esbuild || true
+          npm approve-scripts ffmpeg-static || true
+
+      - name: Build macOS
+        run: npm run dist:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dist
+          path: |
+            dist-installer/*.dmg
+            dist-installer/*.zip
+            dist-installer/*.yml
+            dist-installer/*.blockmap
+
+  release:
+    needs: [build-windows, build-mac]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-dist
+          path: dist-artifacts
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dist
+          path: dist-artifacts
+
+      - name: Get version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Cours Studio v${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## Cours Studio v${{ steps.version.outputs.VERSION }}
+
+            ### 📥 Téléchargements Windows
+            - **Cours Studio Setup *.exe** — Installateur (recommandé)
+            - **Cours-Studio-Portable.exe** — Portable / Clé USB
+
+            ### 🍎 Téléchargements macOS
+            - **Cours Studio-*.dmg** — Image disque macOS (glisser-déposer dans Applications)
+
+            ### ℹ️ Notes
+            - Les données sont stockées localement sur ton appareil
+            - L'app vérifie automatiquement les mises à jour au démarrage
+          files: dist-artifacts/**/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
