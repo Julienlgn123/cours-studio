@@ -5,22 +5,29 @@ import { autoUpdater } from 'electron-updater'
 import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
   getCoursesBySubject, getCourse, createCourse, updateCourse, deleteCourse,
   getAllCourses, getVersions, createVersion } from './db'
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync } from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
-import { join as pathJoin } from 'path'
+
+// Cross-platform ffmpeg binary name
+const ffmpegBin = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 let ffmpegPath: string = require('ffmpeg-static')
 
-// When packaged via electron-builder, native modules are in app.asar.unpacked
 if (app.isPackaged) {
-  const unpacked = ffmpegPath.replace('app.asar', 'app.asar.unpacked')
-  if (existsSync(unpacked)) ffmpegPath = unpacked
-  else {
-    // extraResources fallback
-    const extra = pathJoin(process.resourcesPath, 'ffmpeg', 'ffmpeg.exe')
-    if (existsSync(extra)) ffmpegPath = extra
+  // electron-builder unpacks native modules into app.asar.unpacked
+  const unpacked = ffmpegPath.replace('app.asar' + require('path').sep, 'app.asar.unpacked' + require('path').sep)
+  if (existsSync(unpacked)) {
+    ffmpegPath = unpacked
+  } else {
+    // extraResources fallback (set in electron-builder config)
+    ffmpegPath = join(process.resourcesPath, 'ffmpeg', ffmpegBin)
   }
+}
+
+// Ensure executable on Unix
+if (process.platform !== 'win32' && existsSync(ffmpegPath)) {
+  try { chmodSync(ffmpegPath, 0o755) } catch { /* ok */ }
 }
 
 ffmpeg.setFfmpegPath(ffmpegPath)

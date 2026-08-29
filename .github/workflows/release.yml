@@ -6,6 +6,7 @@ on:
       - 'v*'
 
 jobs:
+  # ─── Windows ────────────────────────────────────────────────
   build-windows:
     runs-on: windows-latest
     steps:
@@ -19,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      - name: Allow native scripts
+      - name: Approve native scripts
         run: |
           npm approve-scripts better-sqlite3
           npm approve-scripts electron
@@ -27,20 +28,21 @@ jobs:
           npm approve-scripts ffmpeg-static
           npm approve-scripts electron-winstaller
 
-      - name: Build Windows
+      - name: Build Windows (NSIS + Portable)
         run: npm run dist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Windows artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-dist
+          name: windows
           path: |
             dist-installer/*.exe
             dist-installer/*.yml
             dist-installer/*.blockmap
 
+  # ─── macOS ─────────────────────────────────────────────────
   build-mac:
     runs-on: macos-latest
     steps:
@@ -54,50 +56,89 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      - name: Allow native scripts
+      - name: Approve native scripts
         run: |
           npm approve-scripts better-sqlite3 || true
           npm approve-scripts electron || true
           npm approve-scripts esbuild || true
           npm approve-scripts ffmpeg-static || true
 
-      - name: Build macOS
+      - name: Build macOS (DMG x64 + arm64)
         run: npm run dist:mac
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Upload macOS artifacts
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mac-dist
+          name: mac
           path: |
             dist-installer/*.dmg
             dist-installer/*.zip
             dist-installer/*.yml
             dist-installer/*.blockmap
 
+  # ─── Linux ─────────────────────────────────────────────────
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot dpkg
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Approve native scripts
+        run: |
+          npm approve-scripts better-sqlite3 || true
+          npm approve-scripts electron || true
+          npm approve-scripts esbuild || true
+          npm approve-scripts ffmpeg-static || true
+
+      - name: Build Linux (AppImage + deb)
+        run: npm run dist:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist-installer/*.AppImage
+            dist-installer/*.deb
+            dist-installer/*.yml
+            dist-installer/*.blockmap
+
+  # ─── Create Release ─────────────────────────────────────────
   release:
-    needs: [build-windows, build-mac]
+    needs: [build-windows, build-mac, build-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Windows artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: windows-dist
           path: dist-artifacts
+          merge-multiple: true
 
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: mac-dist
-          path: dist-artifacts
+      - name: List artifacts
+        run: find dist-artifacts -type f | sort
 
-      - name: Get version from tag
+      - name: Get version
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
@@ -106,18 +147,31 @@ jobs:
         with:
           name: "Cours Studio v${{ steps.version.outputs.VERSION }}"
           body: |
-            ## Cours Studio v${{ steps.version.outputs.VERSION }}
+            ## 🎓 Cours Studio v${{ steps.version.outputs.VERSION }}
 
-            ### 📥 Téléchargements Windows
-            - **Cours Studio Setup *.exe** — Installateur (recommandé)
-            - **Cours-Studio-Portable.exe** — Portable / Clé USB
+            ### 🪟 Windows
+            | Fichier | Description |
+            |---|---|
+            | `Cours Studio Setup *.exe` | Installateur (recommandé) — raccourci bureau + menu démarrer |
+            | `Cours-Studio-Portable-*.exe` | Portable — aucune installation, fonctionne sur clé USB |
 
-            ### 🍎 Téléchargements macOS
-            - **Cours Studio-*.dmg** — Image disque macOS (glisser-déposer dans Applications)
+            ### 🍎 macOS
+            | Fichier | Description |
+            |---|---|
+            | `Cours-Studio-*-x64.dmg` | Mac Intel (2020 et avant) |
+            | `Cours-Studio-*-arm64.dmg` | Mac Apple Silicon M1/M2/M3/M4 |
 
-            ### ℹ️ Notes
-            - Les données sont stockées localement sur ton appareil
-            - L'app vérifie automatiquement les mises à jour au démarrage
+            > Première ouverture sur macOS : clic droit → Ouvrir → Ouvrir quand même (Gatekeeper)
+
+            ### 🐧 Linux
+            | Fichier | Description |
+            |---|---|
+            | `Cours-Studio-*.AppImage` | Universel — fonctionne sur toutes les distros |
+            | `Cours-Studio-*.deb` | Debian / Ubuntu / Mint |
+
+            ---
+            💾 **Données** : stockées localement dans le dossier utilisateur, jamais dans le cloud.
+            🔄 **Mise à jour** : l'app vérifie automatiquement les nouvelles versions au démarrage.
           files: dist-artifacts/**/*
           draft: false
           prerelease: false
