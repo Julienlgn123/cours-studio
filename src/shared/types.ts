@@ -24,9 +24,27 @@ export interface Course {
   content: string
   audioPath?: string
   videoPath?: string
+  tagIds: string[]
   versions: CourseVersion[]
   createdAt: number
   updatedAt: number
+}
+
+export interface Tag {
+  id: string
+  name: string
+  emoji: string
+  color: string
+  createdAt: number
+}
+
+export interface Attachment {
+  id: string
+  courseId: string
+  fileName: string
+  filePath: string
+  size: number
+  createdAt: number
 }
 
 export interface Recording {

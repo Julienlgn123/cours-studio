@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Subject, Course, CourseVersion } from '../../../shared/types'
+import type { Subject, Course, CourseVersion, Tag } from '../../../shared/types'
 
 export interface AITask {
   courseId: string
@@ -15,6 +15,7 @@ export interface AITask {
 interface AppStore {
   subjects: Subject[]
   courses: Course[]
+  tags: Tag[]
   activeCourseId: string | null
   activeSubjectId: string | null
 
@@ -36,6 +37,11 @@ interface AppStore {
   createCourse: (data: { subjectId: string; title?: string; emoji?: string; content?: string; audioPath?: string; videoPath?: string }) => Promise<Course>
   updateCourse: (id: string, data: Partial<{ title: string; emoji: string; content: string; subjectId: string; audioPath: string; videoPath: string }>) => Promise<void>
   deleteCourse: (id: string) => Promise<void>
+  loadTags: () => Promise<void>
+  createTag: (data: { name: string; emoji: string; color: string }) => Promise<Tag>
+  updateTag: (id: string, data: Partial<{ name: string; emoji: string; color: string }>) => Promise<void>
+  deleteTag: (id: string) => Promise<void>
+  setCourseTags: (courseId: string, tagIds: string[]) => Promise<void>
   setActiveCourse: (id: string | null) => void
   setActiveSubject: (id: string | null) => void
   setView: (view: AppStore['view']) => void
@@ -58,6 +64,7 @@ const api = (window as any).api
 export const useStore = create<AppStore>((set, get) => ({
   subjects: [],
   courses: [],
+  tags: [],
   activeCourseId: null,
   activeSubjectId: null,
   view: 'home',
@@ -114,6 +121,32 @@ export const useStore = create<AppStore>((set, get) => ({
   deleteCourse: async (id) => {
     await api.courses.delete(id)
     set((s) => ({ courses: s.courses.filter((c) => c.id !== id), activeCourseId: s.activeCourseId === id ? null : s.activeCourseId }))
+  },
+
+  loadTags: async () => { const tags = await api.tags.get(); set({ tags }) },
+
+  createTag: async (data) => {
+    const tag = await api.tags.create(data)
+    set((s) => ({ tags: [...s.tags, tag].sort((a, b) => a.name.localeCompare(b.name)) }))
+    return tag
+  },
+
+  updateTag: async (id, data) => {
+    await api.tags.update(id, data)
+    set((s) => ({ tags: s.tags.map((t) => t.id === id ? { ...t, ...data } : t) }))
+  },
+
+  deleteTag: async (id) => {
+    await api.tags.delete(id)
+    set((s) => ({
+      tags: s.tags.filter((t) => t.id !== id),
+      courses: s.courses.map((c) => ({ ...c, tagIds: c.tagIds.filter((tid) => tid !== id) }))
+    }))
+  },
+
+  setCourseTags: async (courseId, tagIds) => {
+    await api.tags.setForCourse(courseId, tagIds)
+    set((s) => ({ courses: s.courses.map((c) => c.id === courseId ? { ...c, tagIds } : c) }))
   },
 
   setActiveCourse: (id) => set({ activeCourseId: id }),

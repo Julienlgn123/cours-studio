@@ -1,11 +1,13 @@
-import { app, BrowserWindow, shell, ipcMain, desktopCapturer, protocol, net } from 'electron'
-import { join } from 'path'
+import { app, BrowserWindow, shell, ipcMain, desktopCapturer, protocol, net, dialog } from 'electron'
+import { join, extname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
   getCoursesBySubject, getCourse, createCourse, updateCourse, deleteCourse,
-  getAllCourses, getVersions, createVersion } from './db'
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync } from 'fs'
+  getAllCourses, getVersions, createVersion,
+  getTags, createTag, updateTag, deleteTag, setCourseTags,
+  getAttachments, createAttachment, deleteAttachment } from './db'
+import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync, copyFileSync, statSync } from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
 import { pickAndExtractDocument } from './documents'
 
@@ -131,6 +133,12 @@ function getRecordingsDir(): string {
   return dir
 }
 
+function getAttachmentsDir(): string {
+  const dir = join(app.getPath('userData'), 'attachments')
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+  return dir
+}
+
 function registerIpc(): void {
   ipcMain.handle('window:minimize', () => mainWindow.minimize())
   ipcMain.handle('window:maximize', () => { mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize() })
@@ -150,6 +158,36 @@ function registerIpc(): void {
 
   ipcMain.handle('versions:get', (_, id) => getVersions(id))
   ipcMain.handle('versions:create', (_, d) => createVersion(d))
+
+  ipcMain.handle('tags:get', () => getTags())
+  ipcMain.handle('tags:create', (_, d) => createTag(d))
+  ipcMain.handle('tags:update', (_, id, d) => { updateTag(id, d); return true })
+  ipcMain.handle('tags:delete', (_, id) => { deleteTag(id); return true })
+  ipcMain.handle('courses:setTags', (_, courseId, tagIds) => { setCourseTags(courseId, tagIds); return true })
+
+  // Attachments: copy a dropped/picked file into userData/attachments and register it
+  ipcMain.handle('attachments:get', (_, courseId) => getAttachments(courseId))
+  ipcMain.handle('attachments:add', (_, { courseId, sourcePath }: { courseId: string; sourcePath: string }) => {
+    if (!existsSync(sourcePath)) throw new Error('Fichier introuvable : ' + sourcePath)
+    const dir = join(getAttachmentsDir(), courseId)
+    mkdirSync(dir, { recursive: true })
+    const originalName = sourcePath.split(/[\\/]/).pop() ?? 'fichier'
+    const ext = extname(originalName)
+    const base = originalName.slice(0, originalName.length - ext.length)
+    let destPath = join(dir, originalName)
+    let n = 1
+    while (existsSync(destPath)) { destPath = join(dir, `${base} (${n})${ext}`); n++ }
+    copyFileSync(sourcePath, destPath)
+    const size = statSync(destPath).size
+    return createAttachment({ courseId, fileName: originalName, filePath: destPath, size })
+  })
+  ipcMain.handle('attachments:delete', (_, id) => {
+    const attachment = deleteAttachment(id)
+    if (attachment) { try { unlinkSync(attachment.filePath) } catch { /* already gone */ } }
+    return true
+  })
+  ipcMain.handle('attachments:reveal', (_, filePath: string) => shell.showItemInFolder(filePath))
+  ipcMain.handle('attachments:open', (_, filePath: string) => shell.openPath(filePath))
 
   ipcMain.handle('recording:getSources', async () => {
     const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] })
@@ -269,6 +307,35 @@ function registerIpc(): void {
     }
     const data = await response.json() as { choices: Array<{ message: { content: string } }> }
     return data.choices[0]?.message?.content ?? ''
+  })
+
+  // Export a course to PDF: render its HTML in a hidden window, then print to PDF
+  ipcMain.handle('export:pdf', async (_, { title, html }: { title: string; html: string }) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Exporter en PDF',
+      defaultPath: `${title.replace(/[<>:"/\\|?*\x00-\x1f]/g, '-') || 'cours'}.pdf`,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }]
+    })
+    if (canceled || !filePath) return null
+
+    const printWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
+    const page = `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <style>
+        body { font-family: -apple-system, Segoe UI, Arial, sans-serif; color: #111; padding: 32px 40px; line-height: 1.6; }
+        h1 { font-size: 22px; margin-bottom: 18px; }
+        h2 { font-size: 17px; margin-top: 22px; }
+        h3 { font-size: 14px; margin-top: 16px; }
+        img { max-width: 100%; }
+        pre { background: #f3f3f3; padding: 10px; border-radius: 6px; overflow: auto; }
+        blockquote { border-left: 3px solid #ccc; margin: 8px 0; padding-left: 12px; color: #444; }
+        .katex-display { margin: 12px 0; }
+      </style>
+      </head><body><h1>${title.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</h1>${html}</body></html>`
+    await printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(page))
+    const buffer = await printWindow.webContents.printToPDF({ printBackground: true, pageSize: 'A4' })
+    printWindow.destroy()
+    writeFileSync(filePath, buffer)
+    return filePath
   })
 
   // Document import: pick a file (pdf/docx/odt/txt) and extract its plain text

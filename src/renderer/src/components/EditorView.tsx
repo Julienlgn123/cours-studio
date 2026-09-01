@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp } from 'lucide-react'
+import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown } from 'lucide-react'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const api = (window as any).api
 import { useStore } from '../store'
 import Editor from './Editor'
 import RecordingBar from './RecordingBar'
 import VersionPanel from './VersionPanel'
 import MediaPanel from './MediaPanel'
 import ImportDocumentModal from './ImportDocumentModal'
+import AttachmentsPanel from './AttachmentsPanel'
 
 export default function EditorView() {
   const { courses, subjects, activeCourseId, setView, updateCourse, deleteCourse, showToast } = useStore()
@@ -18,7 +22,7 @@ export default function EditorView() {
   const [saved, setSaved] = useState(true)
   const [showRecording, setShowRecording] = useState(false)
   const [showImport, setShowImport] = useState(false)
-  const [activeTab, setActiveTab] = useState<'editor' | 'versions' | 'media'>('editor')
+  const [activeTab, setActiveTab] = useState<'editor' | 'versions' | 'media' | 'files'>('editor')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -54,6 +58,11 @@ export default function EditorView() {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     await save(title, content)
     showToast('Cours sauvegardé', 'success')
+  }
+
+  async function exportPdf() {
+    const filePath = await api.exportPdf({ title, html: content })
+    if (filePath) showToast('PDF exporté : ' + filePath, 'success')
   }
 
   function goBack() {
@@ -123,6 +132,9 @@ export default function EditorView() {
           <button className="icon-btn" onClick={forceSave} data-tooltip="Sauvegarder (Ctrl+S)" data-tooltip-dir="left">
             <Save size={15} />
           </button>
+          <button className="icon-btn" onClick={exportPdf} data-tooltip="Exporter en PDF" data-tooltip-dir="left">
+            <FileDown size={15} />
+          </button>
           <button className="icon-btn" onClick={() => setShowDeleteConfirm(true)} data-tooltip="Supprimer ce cours" data-tooltip-dir="left" style={{ color: 'var(--danger, #ef4444)' }}>
             <Trash2 size={15} />
           </button>
@@ -181,6 +193,9 @@ export default function EditorView() {
             </span>
           </div>
         )}
+        <div className={`tab ${activeTab === 'files' ? 'active' : ''}`} onClick={() => setActiveTab('files')}>
+          Fichiers
+        </div>
       </div>
 
       {/* Content */}
@@ -229,6 +244,10 @@ export default function EditorView() {
 
         {activeTab === 'media' && (
           <MediaPanel course={course} />
+        )}
+
+        {activeTab === 'files' && (
+          <AttachmentsPanel courseId={course.id} />
         )}
       </div>
     </div>

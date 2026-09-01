@@ -12,11 +12,12 @@ import Toast from './components/Toast'
 import AIBanner from './components/AIBanner'
 
 export default function App() {
-  const { view, toast, loadSubjects, loadSettings } = useStore()
+  const { view, toast, loadSubjects, loadSettings, loadTags } = useStore()
 
   useEffect(() => {
     loadSubjects()
     loadSettings()
+    loadTags()
   }, [])
 
   return (

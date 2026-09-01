@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const api = {
   window: {
@@ -24,6 +24,23 @@ const api = {
     get: (courseId: string) => ipcRenderer.invoke('versions:get', courseId),
     create: (data: unknown) => ipcRenderer.invoke('versions:create', data)
   },
+  tags: {
+    get: () => ipcRenderer.invoke('tags:get'),
+    create: (data: unknown) => ipcRenderer.invoke('tags:create', data),
+    update: (id: string, data: unknown) => ipcRenderer.invoke('tags:update', id, data),
+    delete: (id: string) => ipcRenderer.invoke('tags:delete', id),
+    setForCourse: (courseId: string, tagIds: string[]) => ipcRenderer.invoke('courses:setTags', courseId, tagIds)
+  },
+  attachments: {
+    get: (courseId: string) => ipcRenderer.invoke('attachments:get', courseId),
+    add: (data: { courseId: string; sourcePath: string }) => ipcRenderer.invoke('attachments:add', data),
+    delete: (id: string) => ipcRenderer.invoke('attachments:delete', id),
+    reveal: (filePath: string) => ipcRenderer.invoke('attachments:reveal', filePath),
+    open: (filePath: string) => ipcRenderer.invoke('attachments:open', filePath),
+    // Resolves the real filesystem path of a File dropped onto the window
+    getPathForFile: (file: File): string => webUtils.getPathForFile(file)
+  },
+  exportPdf: (data: { title: string; html: string }): Promise<string | null> => ipcRenderer.invoke('export:pdf', data),
   recording: {
     getSources: () => ipcRenderer.invoke('recording:getSources'),
     save: (data: { subjectName: string; courseName: string; type: 'audio' | 'video'; buffer: number[] }) => ipcRenderer.invoke('recording:save', data),

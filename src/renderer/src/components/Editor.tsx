@@ -7,12 +7,24 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Typography from '@tiptap/extension-typography'
 import CodeBlock from '@tiptap/extension-code-block'
+import TextAlign from '@tiptap/extension-text-align'
+import Link from '@tiptap/extension-link'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
+import TextStyle from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
 import {
   Bold, Italic, UnderlineIcon, Strikethrough, Highlighter,
   Heading1, Heading2, Heading3, List, ListOrdered, ListChecks,
-  Code, Quote, Minus, Undo, Redo
+  Code, Quote, Minus, Undo, Redo, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Link as LinkIcon, Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
+  Sigma, Keyboard, Palette
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { MathInline, MathBlock } from '../editor/math'
+import { Indent } from '../editor/indent'
+import { SlashCommand } from '../editor/slashCommand'
+import ShortcutsModal from './ShortcutsModal'
 
 interface Props {
   content: string
@@ -20,17 +32,32 @@ interface Props {
   readOnly?: boolean
 }
 
+const TEXT_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9', '#e5e7eb']
+
 export default function Editor({ content, onChange, readOnly = false }: Props) {
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
-      Placeholder.configure({ placeholder: 'Commence à écrire ton cours...' }),
+      Placeholder.configure({ placeholder: 'Commence à écrire ton cours... (tape "/" pour insérer un bloc)' }),
       Underline,
       Highlight.configure({ multicolor: false }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Typography,
-      CodeBlock
+      CodeBlock,
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Link.configure({ openOnClick: false, autolink: true }),
+      Subscript,
+      Superscript,
+      TextStyle,
+      Color,
+      MathInline,
+      MathBlock,
+      Indent,
+      ...(readOnly ? [] : [SlashCommand])
     ],
     content,
     editable: !readOnly,
@@ -76,7 +103,7 @@ export default function Editor({ content, onChange, readOnly = false }: Props) {
 
   return (
     <div className="editor-wrap" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <div className="editor-toolbar" style={{ position: 'sticky', top: 0, background: 'var(--bg-base)', zIndex: 10 }}>
+      <div className="editor-toolbar editor-toolbar-pinned">
         <ToolBtn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Gras">
           <Bold size={14} />
         </ToolBtn>
@@ -131,13 +158,83 @@ export default function Editor({ content, onChange, readOnly = false }: Props) {
 
         <div className="editor-toolbar-sep" />
 
+        <ToolBtn onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} title="Aligner à gauche">
+          <AlignLeft size={14} />
+        </ToolBtn>
+        <ToolBtn onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} title="Centrer">
+          <AlignCenter size={14} />
+        </ToolBtn>
+        <ToolBtn onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Aligner à droite">
+          <AlignRight size={14} />
+        </ToolBtn>
+        <ToolBtn onClick={() => editor.chain().focus().setTextAlign('justify').run()} active={editor.isActive({ textAlign: 'justify' })} title="Justifier">
+          <AlignJustify size={14} />
+        </ToolBtn>
+
+        <div className="editor-toolbar-sep" />
+
+        <ToolBtn
+          onClick={() => {
+            const url = window.prompt('URL du lien :', editor.getAttributes('link').href ?? 'https://')
+            if (url === null) return
+            if (url === '') { editor.chain().focus().unsetLink().run(); return }
+            editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+          }}
+          active={editor.isActive('link')}
+          title="Lien"
+        >
+          <LinkIcon size={14} />
+        </ToolBtn>
+        <ToolBtn onClick={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive('subscript')} title="Indice">
+          <SubscriptIcon size={14} />
+        </ToolBtn>
+        <ToolBtn onClick={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive('superscript')} title="Exposant">
+          <SuperscriptIcon size={14} />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => editor.chain().focus().insertContent({ type: 'mathInline', attrs: { latex: '' } }).run()}
+          title="Formule LaTeX (mathbb, frac, sqrt...)"
+        >
+          <Sigma size={14} />
+        </ToolBtn>
+
+        <div style={{ position: 'relative' }}>
+          <ToolBtn onClick={() => setShowColorPicker(!showColorPicker)} title="Couleur du texte">
+            <Palette size={14} />
+          </ToolBtn>
+          {showColorPicker && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: 8, display: 'flex', gap: 5, zIndex: 20 }}>
+              {TEXT_COLORS.map((c) => (
+                <div
+                  key={c}
+                  onClick={() => { editor.chain().focus().setColor(c).run(); setShowColorPicker(false) }}
+                  style={{ width: 16, height: 16, borderRadius: '50%', background: c, cursor: 'pointer' }}
+                />
+              ))}
+              <div
+                onClick={() => { editor.chain().focus().unsetColor().run(); setShowColorPicker(false) }}
+                style={{ width: 16, height: 16, borderRadius: '50%', border: '1px solid var(--border)', cursor: 'pointer' }}
+                title="Réinitialiser"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="editor-toolbar-sep" />
+
         <ToolBtn onClick={() => editor.chain().focus().undo().run()} title="Annuler">
           <Undo size={14} />
         </ToolBtn>
         <ToolBtn onClick={() => editor.chain().focus().redo().run()} title="Rétablir">
           <Redo size={14} />
         </ToolBtn>
+
+        <ToolBtn onClick={() => setShowShortcuts(true)} title="Raccourcis clavier" >
+          <Keyboard size={14} />
+        </ToolBtn>
       </div>
+
+      {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
 
       <div style={{ flex: 1, userSelect: 'text' }}>
         <EditorContent editor={editor} />

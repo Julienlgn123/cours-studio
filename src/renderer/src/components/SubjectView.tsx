@@ -9,18 +9,25 @@ import ContextMenu from './ContextMenu'
 import type { Course } from '../../../shared/types'
 
 export default function SubjectView() {
-  const { subjects, courses, activeSubjectId, setView, setActiveCourse, setActiveSubject, loadCourses, deleteCourse, searchQuery, setSearchQuery, showToast } = useStore()
+  const { subjects, courses, tags, activeSubjectId, setView, setActiveCourse, setActiveSubject, loadCourses, deleteCourse, searchQuery, setSearchQuery, showToast } = useStore()
   const [showNew, setShowNew] = useState(false)
   const [editCourse, setEditCourse] = useState<Course | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; course: Course } | null>(null)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
 
   const subject = subjects.find((s) => s.id === activeSubjectId)
+  const usedTags = useMemo(() => {
+    const ids = new Set(courses.filter((c) => c.subjectId === activeSubjectId).flatMap((c) => c.tagIds))
+    return tags.filter((t) => ids.has(t.id))
+  }, [courses, tags, activeSubjectId])
+
   const subjectCourses = useMemo(() => {
-    const filtered = courses.filter((c) => c.subjectId === activeSubjectId)
+    let filtered = courses.filter((c) => c.subjectId === activeSubjectId)
+    if (tagFilter) filtered = filtered.filter((c) => c.tagIds.includes(tagFilter))
     if (!searchQuery) return filtered
     const q = searchQuery.toLowerCase()
     return filtered.filter((c) => c.title.toLowerCase().includes(q) || c.content.toLowerCase().includes(q))
-  }, [courses, activeSubjectId, searchQuery])
+  }, [courses, activeSubjectId, searchQuery, tagFilter])
 
   function openCourse(id: string) {
     setActiveCourse(id)
@@ -62,6 +69,32 @@ export default function SubjectView() {
           </button>
         </div>
       </div>
+
+      {usedTags.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 16px', borderBottom: '1px solid var(--border)' }}>
+          <button
+            className="btn btn-sm"
+            onClick={() => setTagFilter(null)}
+            style={{ background: !tagFilter ? 'var(--accent-dim)' : 'var(--bg-overlay)', color: !tagFilter ? 'var(--accent-light)' : 'var(--text-secondary)', border: `1px solid ${!tagFilter ? 'var(--accent)' : 'var(--border)'}` }}
+          >
+            Tous
+          </button>
+          {usedTags.map((tag) => (
+            <button
+              key={tag.id}
+              className="btn btn-sm"
+              onClick={() => setTagFilter(tagFilter === tag.id ? null : tag.id)}
+              style={{
+                background: tagFilter === tag.id ? `${tag.color}22` : 'var(--bg-overlay)',
+                color: tagFilter === tag.id ? tag.color : 'var(--text-secondary)',
+                border: `1px solid ${tagFilter === tag.id ? tag.color : 'var(--border)'}`
+              }}
+            >
+              {tag.emoji} {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ flex: 1, overflow: 'auto' }}>
         {subjectCourses.length === 0 ? (
@@ -117,6 +150,8 @@ function CourseCard({ course, subject, onClick, onEdit, onContextMenu }: {
 }) {
   const [hover, setHover] = useState(false)
   const plainText = course.content.replace(/<[^>]+>/g, '').slice(0, 100)
+  const { tags } = useStore()
+  const courseTags = tags.filter((t) => course.tagIds?.includes(t.id))
 
   return (
     <div
@@ -145,6 +180,16 @@ function CourseCard({ course, subject, onClick, onEdit, onContextMenu }: {
       </div>
 
       {plainText && <div className="course-card-preview">{plainText}</div>}
+
+      {courseTags.length > 0 && (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+          {courseTags.map((tag) => (
+            <span key={tag.id} style={{ fontSize: 10.5, padding: '1px 6px', borderRadius: 'var(--radius-full)', background: `${tag.color}22`, color: tag.color }}>
+              {tag.emoji} {tag.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="course-card-meta">
         <Clock size={11} style={{ color: 'var(--text-tertiary)' }} />

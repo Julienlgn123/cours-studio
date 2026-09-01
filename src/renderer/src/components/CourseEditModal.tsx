@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useStore } from '../store'
 import type { Course } from '../../../shared/types'
 import EmojiPicker from './EmojiPicker'
+import TagPicker from './TagPicker'
 
 interface Props {
   course: Course
@@ -10,10 +11,11 @@ interface Props {
 }
 
 export default function CourseEditModal({ course, onClose }: Props) {
-  const { subjects, updateCourse, showToast } = useStore()
+  const { subjects, updateCourse, setCourseTags, showToast } = useStore()
   const [title, setTitle] = useState(course.title)
   const [emoji, setEmoji] = useState(course.emoji ?? '📝')
   const [subjectId, setSubjectId] = useState(course.subjectId)
+  const [tagIds, setTagIds] = useState<string[]>(course.tagIds ?? [])
   const [showPicker, setShowPicker] = useState(false)
   const [loading, setLoading] = useState(false)
   const emojiRef = useRef<HTMLDivElement>(null)
@@ -23,6 +25,7 @@ export default function CourseEditModal({ course, onClose }: Props) {
     setLoading(true)
     try {
       await updateCourse(course.id, { title: title.trim(), emoji, subjectId })
+      await setCourseTags(course.id, tagIds)
       showToast('Cours mis à jour', 'success')
       onClose()
     } finally {
@@ -91,6 +94,12 @@ export default function CourseEditModal({ course, onClose }: Props) {
                 <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Tags */}
+          <div className="field">
+            <label className="field-label">Tags</label>
+            <TagPicker selectedTagIds={tagIds} onChange={setTagIds} />
           </div>
 
           {/* Preview */}

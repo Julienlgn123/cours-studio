@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import type { Subject, Course, CourseVersion } from '../shared/types'
+import type { Subject, Course, CourseVersion, Tag, Attachment } from '../shared/types'
 
 let db: Database.Database
 
@@ -44,6 +44,29 @@ export function initDb(): void {
       label TEXT NOT NULL,
       source TEXT NOT NULL DEFAULT 'manual',
       ai_action TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      emoji TEXT NOT NULL DEFAULT '🏷️',
+      color TEXT NOT NULL DEFAULT '#6366f1',
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS course_tags (
+      course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (course_id, tag_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      file_name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      size INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
   `)
@@ -104,7 +127,7 @@ export function createCourse(data: {
   db.prepare(
     'INSERT INTO courses (id, subject_id, title, emoji, content, audio_path, video_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(id, data.subjectId, data.title ?? 'Sans titre', data.emoji ?? '📝', data.content ?? '', data.audioPath ?? null, data.videoPath ?? null, now, now)
-  return { id, subjectId: data.subjectId, title: data.title ?? 'Sans titre', emoji: data.emoji ?? '📝', content: data.content ?? '', audioPath: data.audioPath, videoPath: data.videoPath, versions: [], createdAt: now, updatedAt: now }
+  return { id, subjectId: data.subjectId, title: data.title ?? 'Sans titre', emoji: data.emoji ?? '📝', content: data.content ?? '', audioPath: data.audioPath, videoPath: data.videoPath, tagIds: [], versions: [], createdAt: now, updatedAt: now }
 }
 
 export function updateCourse(id: string, data: Partial<{ title: string; emoji: string; content: string; subjectId: string; audioPath: string; videoPath: string }>): void {
@@ -143,11 +166,83 @@ export function createVersion(data: Omit<CourseVersion, 'id' | 'createdAt'>): Co
   return { id, ...data, createdAt: now }
 }
 
+// ─── Tags ──────────────────────────────────────────────────────────────────
+
+export function getTags(): Tag[] {
+  return (db.prepare('SELECT * FROM tags ORDER BY name ASC').all() as DbTag[]).map(rowToTag)
+}
+
+export function createTag(data: Omit<Tag, 'id' | 'createdAt'>): Tag {
+  const id = generateId()
+  const now = Date.now()
+  db.prepare('INSERT INTO tags (id, name, emoji, color, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(id, data.name, data.emoji, data.color, now)
+  return { id, ...data, createdAt: now }
+}
+
+export function updateTag(id: string, data: Partial<Omit<Tag, 'id' | 'createdAt'>>): void {
+  const fields: string[] = []
+  const values: unknown[] = []
+  if (data.name !== undefined)  { fields.push('name = ?');  values.push(data.name) }
+  if (data.emoji !== undefined) { fields.push('emoji = ?'); values.push(data.emoji) }
+  if (data.color !== undefined) { fields.push('color = ?'); values.push(data.color) }
+  if (!fields.length) return
+  values.push(id)
+  db.prepare(`UPDATE tags SET ${fields.join(', ')} WHERE id = ?`).run(...values)
+}
+
+export function deleteTag(id: string): void {
+  db.prepare('DELETE FROM tags WHERE id = ?').run(id)
+}
+
+export function setCourseTags(courseId: string, tagIds: string[]): void {
+  db.prepare('DELETE FROM course_tags WHERE course_id = ?').run(courseId)
+  const insert = db.prepare('INSERT OR IGNORE INTO course_tags (course_id, tag_id) VALUES (?, ?)')
+  for (const tagId of tagIds) insert.run(courseId, tagId)
+}
+
+function getTagIdsForCourse(courseId: string): string[] {
+  return (db.prepare('SELECT tag_id FROM course_tags WHERE course_id = ?').all(courseId) as Array<{ tag_id: string }>)
+    .map((r) => r.tag_id)
+}
+
+// ─── Attachments ─────────────────────────────────────────────────────────────
+
+export function getAttachments(courseId: string): Attachment[] {
+  return (db.prepare('SELECT * FROM attachments WHERE course_id = ? ORDER BY created_at DESC').all(courseId) as DbAttachment[])
+    .map(rowToAttachment)
+}
+
+export function createAttachment(data: Omit<Attachment, 'id' | 'createdAt'>): Attachment {
+  const id = generateId()
+  const now = Date.now()
+  db.prepare('INSERT INTO attachments (id, course_id, file_name, file_path, size, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, data.courseId, data.fileName, data.filePath, data.size, now)
+  return { id, ...data, createdAt: now }
+}
+
+export function deleteAttachment(id: string): Attachment | null {
+  const row = db.prepare('SELECT * FROM attachments WHERE id = ?').get(id) as DbAttachment | undefined
+  if (!row) return null
+  db.prepare('DELETE FROM attachments WHERE id = ?').run(id)
+  return rowToAttachment(row)
+}
+
 // ─── Row types & mappers ────────────────────────────────────────────────────
 
 interface DbSubject { id: string; name: string; emoji: string; color: string; created_at: number }
 interface DbCourse  { id: string; subject_id: string; title: string; emoji: string; content: string; audio_path: string | null; video_path: string | null; created_at: number; updated_at: number }
 interface DbVersion { id: string; course_id: string; content: string; label: string; source: string; ai_action: string | null; created_at: number }
+interface DbTag { id: string; name: string; emoji: string; color: string; created_at: number }
+interface DbAttachment { id: string; course_id: string; file_name: string; file_path: string; size: number; created_at: number }
+
+function rowToTag(row: DbTag): Tag {
+  return { id: row.id, name: row.name, emoji: row.emoji, color: row.color, createdAt: row.created_at }
+}
+
+function rowToAttachment(row: DbAttachment): Attachment {
+  return { id: row.id, courseId: row.course_id, fileName: row.file_name, filePath: row.file_path, size: row.size, createdAt: row.created_at }
+}
 
 function rowToSubject(row: DbSubject): Subject {
   return { id: row.id, name: row.name, emoji: row.emoji, color: row.color, createdAt: row.created_at }
@@ -155,7 +250,8 @@ function rowToSubject(row: DbSubject): Subject {
 
 function rowToCourse(row: DbCourse): Course {
   const versions = (db.prepare('SELECT * FROM course_versions WHERE course_id = ? ORDER BY created_at DESC').all(row.id) as DbVersion[]).map(rowToVersion)
-  return { id: row.id, subjectId: row.subject_id, title: row.title, emoji: row.emoji ?? '📝', content: row.content, audioPath: row.audio_path ?? undefined, videoPath: row.video_path ?? undefined, versions, createdAt: row.created_at, updatedAt: row.updated_at }
+  const tagIds = getTagIdsForCourse(row.id)
+  return { id: row.id, subjectId: row.subject_id, title: row.title, emoji: row.emoji ?? '📝', content: row.content, audioPath: row.audio_path ?? undefined, videoPath: row.video_path ?? undefined, tagIds, versions, createdAt: row.created_at, updatedAt: row.updated_at }
 }
 
 function rowToVersion(row: DbVersion): CourseVersion {
