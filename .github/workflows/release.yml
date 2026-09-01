@@ -50,7 +50,11 @@ jobs:
         run: npm run dist:mac -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # No paid Developer ID cert available: leave identity/CSC_* unset so
+          # electron-builder falls back to ad-hoc signing (`codesign -s -`).
+          # A fully unsigned arm64 app is rejected by Gatekeeper as "damaged" —
+          # ad-hoc signing is the free fix. Do NOT set CSC_IDENTITY_AUTO_DISCOVERY=false
+          # here, it disables that fallback too.
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
