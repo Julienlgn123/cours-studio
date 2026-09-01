@@ -1255,3 +1255,11 @@ kbd {
   right: 0;
   transform: none;
 }
+
+/* Barre d'outils de l'éditeur : elle est collée en haut de sa zone de scroll,
+   donc un tooltip qui s'ouvre vers le haut se fait couper par le overflow du
+   parent et devient invisible. On le fait plutôt s'ouvrir vers le bas. */
+.editor-toolbar-pinned [data-tooltip]::after {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
