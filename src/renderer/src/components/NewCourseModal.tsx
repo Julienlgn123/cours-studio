@@ -1,10 +1,18 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Upload, FileText } from 'lucide-react'
 import { useStore } from '../store'
+import { textToHtml } from '../utils/text'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const api = (window as any).api
 
 interface Props {
   subjectId?: string
   onClose: () => void
+}
+
+function stripExt(name: string): string {
+  return name.replace(/\.[^./\\]+$/, '')
 }
 
 export default function NewCourseModal({ subjectId, onClose }: Props) {
@@ -12,6 +20,26 @@ export default function NewCourseModal({ subjectId, onClose }: Props) {
   const [title, setTitle] = useState('')
   const [selectedSubjectId, setSelectedSubjectId] = useState(subjectId ?? subjects[0]?.id ?? '')
   const [loading, setLoading] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importedText, setImportedText] = useState('')
+  const [importedFileName, setImportedFileName] = useState('')
+
+  async function handleImport() {
+    setImporting(true)
+    try {
+      const result = await api.documents.import()
+      if (result) {
+        setImportedText(result.text)
+        setImportedFileName(result.fileName)
+        if (!title.trim()) setTitle(stripExt(result.fileName))
+        showToast(`Document importé : ${result.fileName}`, 'success')
+      }
+    } catch (err) {
+      showToast('Erreur d\'import : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   async function handleCreate() {
     if (!selectedSubjectId) return
@@ -19,7 +47,8 @@ export default function NewCourseModal({ subjectId, onClose }: Props) {
     try {
       const course = await createCourse({
         subjectId: selectedSubjectId,
-        title: title.trim() || 'Sans titre'
+        title: title.trim() || stripExt(importedFileName) || 'Sans titre',
+        content: importedText ? textToHtml(importedText) : undefined
       })
       setActiveCourse(course.id)
       setView('editor')
@@ -75,6 +104,24 @@ export default function NewCourseModal({ subjectId, onClose }: Props) {
               Crée d'abord une matière dans la barre latérale.
             </p>
           )}
+
+          <div className="field">
+            <label className="field-label">Cours déjà fait (optionnel)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="btn btn-secondary btn-sm" onClick={handleImport} disabled={importing}>
+                {importing ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Upload size={14} />}
+                Importer un fichier (PDF, Word, ODT, TXT)
+              </button>
+            </div>
+            {importedFileName && (
+              <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent-light)', background: 'var(--accent-dim)', padding: '4px 10px', borderRadius: 'var(--radius-full)', width: 'fit-content' }}>
+                <FileText size={12} /> {importedFileName} — {importedText.length.toLocaleString()} caractères
+              </div>
+            )}
+            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+              Le contenu du fichier sera mis dans les notes du nouveau cours, prêt à être édité.
+            </div>
+          </div>
         </div>
 
         <div className="modal-footer">

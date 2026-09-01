@@ -1,17 +1,9 @@
 import { useState } from 'react'
 import { X, Upload, FileText, Clipboard } from 'lucide-react'
+import { textToHtml } from '../utils/text'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
-
-function textToHtml(text: string): string {
-  return text
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => `<p>${block.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>')}</p>`)
-    .join('\n')
-}
 
 export default function ImportDocumentModal({
   onClose,
