@@ -1263,3 +1263,19 @@ kbd {
   bottom: auto;
   top: calc(100% + 6px);
 }
+
+/* Idem pour les boutons tout en haut de la fenêtre (titlebar, en-tête de page) :
+   pas de place au-dessus pour un tooltip qui s'ouvre vers le haut, il sort de
+   la fenêtre et devient invisible. On le fait s'ouvrir vers le bas. */
+[data-tooltip-dir="down"]::after,
+[data-tooltip-dir="left-down"]::after {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+/* left-down cumule les deux : ancré à droite ET ouvert vers le bas */
+[data-tooltip-dir="left-down"]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}

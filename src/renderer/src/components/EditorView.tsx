@@ -88,7 +88,7 @@ export default function EditorView() {
       {/* Header */}
       <div className="page-header" style={{ padding: '10px 16px' }}>
         <div className="page-header-left">
-          <button className="icon-btn" onClick={goBack} data-tooltip="Retour">
+          <button className="icon-btn" onClick={goBack} data-tooltip="Retour" data-tooltip-dir="down">
             <ArrowLeft size={16} />
           </button>
           {subject && (
@@ -109,7 +109,7 @@ export default function EditorView() {
             className="icon-btn"
             onClick={() => setShowImport(true)}
             data-tooltip="Importer le cours du professeur (PDF, Word, ODT...)"
-            data-tooltip-dir="left"
+            data-tooltip-dir="left-down"
           >
             <FileUp size={15} />
           </button>
@@ -117,7 +117,7 @@ export default function EditorView() {
             className={`icon-btn ${showRecording ? 'active' : ''}`}
             onClick={() => setShowRecording(!showRecording)}
             data-tooltip="Enregistrement audio/vidéo"
-            data-tooltip-dir="left"
+            data-tooltip-dir="left-down"
           >
             <Mic size={15} />
           </button>
@@ -125,17 +125,17 @@ export default function EditorView() {
             className={`icon-btn ${activeTab === 'versions' ? 'active' : ''}`}
             onClick={() => setActiveTab(activeTab === 'versions' ? 'editor' : 'versions')}
             data-tooltip="Historique des versions"
-            data-tooltip-dir="left"
+            data-tooltip-dir="left-down"
           >
             <History size={15} />
           </button>
-          <button className="icon-btn" onClick={forceSave} data-tooltip="Sauvegarder (Ctrl+S)" data-tooltip-dir="left">
+          <button className="icon-btn" onClick={forceSave} data-tooltip="Sauvegarder (Ctrl+S)" data-tooltip-dir="left-down">
             <Save size={15} />
           </button>
-          <button className="icon-btn" onClick={exportPdf} data-tooltip="Exporter en PDF" data-tooltip-dir="left">
+          <button className="icon-btn" onClick={exportPdf} data-tooltip="Exporter en PDF" data-tooltip-dir="left-down">
             <FileDown size={15} />
           </button>
-          <button className="icon-btn" onClick={() => setShowDeleteConfirm(true)} data-tooltip="Supprimer ce cours" data-tooltip-dir="left" style={{ color: 'var(--danger, #ef4444)' }}>
+          <button className="icon-btn" onClick={() => setShowDeleteConfirm(true)} data-tooltip="Supprimer ce cours" data-tooltip-dir="left-down" style={{ color: 'var(--danger, #ef4444)' }}>
             <Trash2 size={15} />
           </button>
         </div>

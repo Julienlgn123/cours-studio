@@ -26,7 +26,7 @@ export default function TitleBar() {
             className={`icon-btn ${view === 'ai' ? 'active' : ''}`}
             onClick={() => setView(view === 'ai' ? 'home' : 'ai')}
             data-tooltip="Studio IA"
-            data-tooltip-dir="left"
+            data-tooltip-dir="left-down"
           >
             <Sparkles size={15} />
           </button>
@@ -34,7 +34,7 @@ export default function TitleBar() {
             className={`icon-btn ${view === 'quiz' ? 'active' : ''}`}
             onClick={() => setView(view === 'quiz' ? 'home' : 'quiz')}
             data-tooltip="Quiz IA"
-            data-tooltip-dir="left"
+            data-tooltip-dir="left-down"
           >
             <HelpCircle size={15} />
           </button>
@@ -42,7 +42,7 @@ export default function TitleBar() {
             className="icon-btn"
             onClick={() => setShowSettings(true)}
             data-tooltip="Paramètres"
-            data-tooltip-dir="left"
+            data-tooltip-dir="left-down"
           >
             <Settings size={15} />
           </button>
