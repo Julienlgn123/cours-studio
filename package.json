@@ -1,6 +1,6 @@
 {
   "name": "cours-studio",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Application locale de prise et gestion de cours",
   "author": {
     "name": "Julienlgn123",
@@ -63,7 +63,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Cours Studio",
-      "license": null
+      "license": null,
+      "artifactName": "Cours-Studio-Setup-${version}.${ext}"
     },
     "portable": {
       "artifactName": "Cours-Studio-Portable-${version}.exe"
