@@ -10,6 +10,7 @@ import AIStudio from './components/AIStudio'
 import QuizStudio from './components/QuizStudio'
 import Toast from './components/Toast'
 import AIBanner from './components/AIBanner'
+import UpdatePromptModal from './components/UpdatePromptModal'
 
 export default function App() {
   const { view, toast, loadSubjects, loadSettings, loadTags } = useStore()
@@ -64,6 +65,7 @@ export default function App() {
       <AnimatePresence>
         {toast && <Toast key="toast" />}
       </AnimatePresence>
+      <UpdatePromptModal />
     </div>
   )
 }
