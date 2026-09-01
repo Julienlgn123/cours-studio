@@ -18,7 +18,7 @@ interface AppStore {
   activeCourseId: string | null
   activeSubjectId: string | null
 
-  view: 'home' | 'subject' | 'editor' | 'ai'
+  view: 'home' | 'subject' | 'editor' | 'ai' | 'quiz'
   sidebarCollapsed: boolean
   searchQuery: string
   settings: { mistralApiKey?: string; mistralModel?: string }

@@ -7,6 +7,7 @@ import HomeView from './components/HomeView'
 import SubjectView from './components/SubjectView'
 import EditorView from './components/EditorView'
 import AIStudio from './components/AIStudio'
+import QuizStudio from './components/QuizStudio'
 import Toast from './components/Toast'
 import AIBanner from './components/AIBanner'
 
@@ -48,6 +49,12 @@ export default function App() {
               <motion.div key="ai" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
                 initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
                 <AIStudio />
+              </motion.div>
+            )}
+            {view === 'quiz' && (
+              <motion.div key="quiz" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                <QuizStudio />
               </motion.div>
             )}
           </AnimatePresence>

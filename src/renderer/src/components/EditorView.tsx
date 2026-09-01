@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ArrowLeft, Save, History, Mic, Check, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp } from 'lucide-react'
 import { useStore } from '../store'
 import Editor from './Editor'
 import RecordingBar from './RecordingBar'
 import VersionPanel from './VersionPanel'
 import MediaPanel from './MediaPanel'
+import ImportDocumentModal from './ImportDocumentModal'
 
 export default function EditorView() {
   const { courses, subjects, activeCourseId, setView, updateCourse, deleteCourse, showToast } = useStore()
@@ -16,6 +17,7 @@ export default function EditorView() {
   const [content, setContent] = useState(course?.content ?? '')
   const [saved, setSaved] = useState(true)
   const [showRecording, setShowRecording] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [activeTab, setActiveTab] = useState<'editor' | 'versions' | 'media'>('editor')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -95,6 +97,14 @@ export default function EditorView() {
             }
           </div>
           <button
+            className="icon-btn"
+            onClick={() => setShowImport(true)}
+            data-tooltip="Importer le cours du professeur (PDF, Word, ODT...)"
+            data-tooltip-dir="left"
+          >
+            <FileUp size={15} />
+          </button>
+          <button
             className={`icon-btn ${showRecording ? 'active' : ''}`}
             onClick={() => setShowRecording(!showRecording)}
             data-tooltip="Enregistrement audio/vidéo"
@@ -118,6 +128,18 @@ export default function EditorView() {
           </button>
         </div>
       </div>
+
+      {showImport && (
+        <ImportDocumentModal
+          onClose={() => setShowImport(false)}
+          onInsert={(html) => {
+            const newContent = content ? `${content}\n${html}` : html
+            setContent(newContent)
+            scheduleAutoSave(title, newContent)
+            showToast('Cours du professeur ajouté aux notes', 'success')
+          }}
+        />
+      )}
 
       {/* Delete confirmation */}
       {showDeleteConfirm && (

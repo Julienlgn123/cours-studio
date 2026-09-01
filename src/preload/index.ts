@@ -55,7 +55,13 @@ const api = {
         ipcRenderer.removeListener('ai:done', handleDone)
         ipcRenderer.removeListener('ai:error', handleError)
       }
-    }
+    },
+    // Non-streaming completion, used by the quiz generator to get a single JSON response
+    complete: (data: unknown): Promise<string> => ipcRenderer.invoke('ai:complete', data)
+  },
+  documents: {
+    // Opens a native file picker (pdf/docx/odt/txt) and returns the extracted plain text
+    import: (): Promise<{ fileName: string; text: string } | null> => ipcRenderer.invoke('documents:import')
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

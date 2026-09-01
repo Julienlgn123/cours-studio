@@ -7,6 +7,7 @@ import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
   getAllCourses, getVersions, createVersion } from './db'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync } from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
+import { pickAndExtractDocument } from './documents'
 
 // Cross-platform ffmpeg binary name
 const ffmpegBin = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
@@ -243,6 +244,39 @@ function registerIpc(): void {
       event.sender.send('ai:done')
     } catch (err) {
       event.sender.send('ai:error', err instanceof Error ? err.message : String(err))
+    }
+  })
+
+  // Non-streaming completion — used for the quiz generator, which needs a single JSON payload
+  ipcMain.handle('ai:complete', async (_, { apiKey, messages, model, json }: {
+    apiKey: string; messages: unknown[]; model?: string; json?: boolean
+  }) => {
+    const selectedModel = model || 'open-mistral-7b'
+    const body: Record<string, unknown> = { model: selectedModel, messages, temperature: 0.5, max_tokens: 4096 }
+    if (json) body.response_format = { type: 'json_object' }
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(body)
+    })
+    if (!response.ok) {
+      let errText = await response.text()
+      try {
+        const parsed = JSON.parse(errText) as { message?: string }
+        if (parsed.message) errText = parsed.message
+      } catch { /* keep raw */ }
+      throw new Error(errText)
+    }
+    const data = await response.json() as { choices: Array<{ message: { content: string } }> }
+    return data.choices[0]?.message?.content ?? ''
+  })
+
+  // Document import: pick a file (pdf/docx/odt/txt) and extract its plain text
+  ipcMain.handle('documents:import', async () => {
+    try {
+      return await pickAndExtractDocument(mainWindow)
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : String(err))
     }
   })
 

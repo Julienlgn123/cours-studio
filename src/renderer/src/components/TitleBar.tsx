@@ -1,4 +1,4 @@
-import { Minus, Square, X, Sparkles, Settings } from 'lucide-react'
+import { Minus, Square, X, Sparkles, Settings, HelpCircle } from 'lucide-react'
 import { useStore } from '../store'
 import SettingsModal from './SettingsModal'
 import { useState } from 'react'
@@ -29,6 +29,14 @@ export default function TitleBar() {
             data-tooltip-dir="left"
           >
             <Sparkles size={15} />
+          </button>
+          <button
+            className={`icon-btn ${view === 'quiz' ? 'active' : ''}`}
+            onClick={() => setView(view === 'quiz' ? 'home' : 'quiz')}
+            data-tooltip="Quiz IA"
+            data-tooltip-dir="left"
+          >
+            <HelpCircle size={15} />
           </button>
           <button
             className="icon-btn"

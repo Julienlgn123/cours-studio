@@ -3,3 +3,4 @@ out/
 dist-installer/
 .env
 *.log
+*.tsbuildinfo

@@ -49,3 +49,10 @@ export type AIAction =
   | 'reorganize'
   | 'merge'
   | 'chat'
+
+export interface QuizQuestion {
+  question: string
+  options: string[]
+  correctIndex: number
+  explanation: string
+}
