@@ -120,8 +120,17 @@ app.whenReady().then(() => {
       mainWindow.webContents.send('update:error', err.message)
     })
 
-    // Check 3 seconds after launch
-    setTimeout(() => autoUpdater.checkForUpdates(), 3000)
+    // The renderer signals when it's mounted and actually listening for
+    // update events — checking too early (e.g. a blind setTimeout) can fire
+    // 'update-available' before anyone subscribed, silently losing it.
+    let updateChecked = false
+    ipcMain.on('renderer:ready', () => {
+      if (updateChecked) return
+      updateChecked = true
+      autoUpdater.checkForUpdates()
+    })
+    // Fallback in case the ready signal is ever missed for some reason
+    setTimeout(() => { if (!updateChecked) { updateChecked = true; autoUpdater.checkForUpdates() } }, 8000)
   }
 })
 

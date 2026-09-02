@@ -91,6 +91,9 @@ const api = {
   app: {
     version: () => ipcRenderer.invoke('app:version'),
     checkUpdate: () => ipcRenderer.invoke('update:check'),
+    // Tells main it's safe to run the startup update check — the renderer is
+    // mounted and its update listeners are registered, so nothing gets lost
+    notifyReady: () => ipcRenderer.send('renderer:ready'),
     downloadUpdate: () => ipcRenderer.invoke('update:download'),
     installUpdate: () => ipcRenderer.invoke('update:install'),
     onUpdateAvailable: (cb: (info: { version: string; releaseNotes: string }) => void) => {
