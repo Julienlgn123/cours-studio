@@ -80,6 +80,10 @@ const api = {
     // Opens a native file picker (pdf/docx/odt/txt) and returns the extracted plain text
     import: (): Promise<{ fileName: string; text: string } | null> => ipcRenderer.invoke('documents:import')
   },
+  images: {
+    // Opens a native file picker for images and returns base64 data URLs
+    pick: (): Promise<{ fileName: string; dataUrl: string }[]> => ipcRenderer.invoke('images:pick')
+  },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     set: (data: unknown) => ipcRenderer.invoke('settings:set', data)

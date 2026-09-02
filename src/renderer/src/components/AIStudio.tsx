@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
-import { Sparkles, Send, ArrowLeft, BookOpen, CheckCircle, Circle, AlertCircle, MessageSquare } from 'lucide-react'
+import { Sparkles, Send, ArrowLeft, BookOpen, CheckCircle, Circle, AlertCircle, MessageSquare, ImagePlus, FileUp, X } from 'lucide-react'
 import { useStore } from '../store'
 import type { AIMessage, AIAction } from '../../../shared/types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
+
+// Free-tier Mistral models are text-only — screenshots/photos need a vision model
+const VISION_MODEL = 'pixtral-12b-2409'
+
+interface ImageAttachment { fileName: string; dataUrl: string }
+interface DocAttachment { fileName: string; text: string }
 
 const AI_ACTIONS: { action: AIAction; icon: string; title: string; desc: string }[] = [
   { action: 'improve',    icon: '✨', title: 'Améliorer',   desc: 'Reformule et enrichit le cours' },
@@ -71,6 +77,9 @@ export default function AIStudio() {
   const [streamError, setStreamError] = useState<string | null>(null)
   const [refineInput, setRefineInput] = useState('')
   const [refining, setRefining] = useState(false)
+  const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([])
+  const [attachedDocs, setAttachedDocs] = useState<DocAttachment[]>([])
+  const [attaching, setAttaching] = useState(false)
 
   const cleanupRef = useRef<(() => void) | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -95,13 +104,59 @@ export default function AIStudio() {
   }
 
   function buildContext(): string {
-    return selectedCourseIds.map((id) => {
+    const courseText = selectedCourseIds.map((id) => {
       const course = courses.find((c) => c.id === id)
       if (!course) return ''
       const subject = subjects.find((s) => s.id === course.subjectId)
       const text = course.content.replace(/<[^>]+>/g, '').trim()
       return `=== ${course.emoji ?? '📝'} ${course.title} (${subject?.name ?? 'Sans matière'}) ===\n${text}`
     }).filter(Boolean).join('\n\n')
+    const docsText = attachedDocs.map((d) => `=== Document fourni : ${d.fileName} ===\n${d.text}`).join('\n\n')
+    return [courseText, docsText].filter(Boolean).join('\n\n')
+  }
+
+  // Wraps a plain-text user message into Mistral's multipart format when images
+  // are attached (required for vision models), otherwise keeps it as plain text
+  function buildUserContent(text: string): string | Array<{ type: string; text?: string; image_url?: string }> {
+    if (attachedImages.length === 0) return text
+    return [
+      { type: 'text', text },
+      ...attachedImages.map((img) => ({ type: 'image_url', image_url: img.dataUrl }))
+    ]
+  }
+
+  function activeModel(): string {
+    return attachedImages.length > 0 ? VISION_MODEL : (settings.mistralModel || 'open-mistral-7b')
+  }
+
+  async function pickImages() {
+    setAttaching(true)
+    try {
+      const results = await api.images.pick()
+      if (results.length > 0) {
+        setAttachedImages((prev) => [...prev, ...results])
+        showToast(`${results.length} image(s) ajoutée(s)`, 'success')
+      }
+    } catch (err) {
+      showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setAttaching(false)
+    }
+  }
+
+  async function pickDoc() {
+    setAttaching(true)
+    try {
+      const result = await api.documents.import()
+      if (result) {
+        setAttachedDocs((prev) => [...prev, result])
+        showToast(`Document ajouté : ${result.fileName}`, 'success')
+      }
+    } catch (err) {
+      showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setAttaching(false)
+    }
   }
 
   function updateStep(id: string, patch: Partial<Step>) {
@@ -110,7 +165,11 @@ export default function AIStudio() {
 
   async function runAction(action: AIAction) {
     if (!settings.mistralApiKey) { showToast('Configure ta clé API Mistral dans les paramètres', 'error'); return }
-    if (selectedCourseIds.length === 0 && action !== 'chat') { showToast('Sélectionne au moins un cours', 'error'); return }
+    const hasAttachments = attachedImages.length > 0 || attachedDocs.length > 0
+    if (selectedCourseIds.length === 0 && !hasAttachments && action !== 'chat') {
+      showToast('Sélectionne au moins un cours ou ajoute une pièce jointe', 'error')
+      return
+    }
 
     setActiveAction(action)
     setStreamText('')
@@ -148,12 +207,14 @@ export default function AIStudio() {
 
     await delay(400)
     const context = buildContext()
-    updateStep('context', { status: 'done', detail: `${context.length.toLocaleString()} caractères — ${courseNames.join(', ')}` })
-    updateStep('send', { status: 'active', detail: `mistral-large-latest · température 0.7` })
+    const attachNote = attachedImages.length > 0 ? ` + ${attachedImages.length} image(s)` : ''
+    updateStep('context', { status: 'done', detail: `${context.length.toLocaleString()} caractères${attachNote} — ${courseNames.join(', ')}` })
+    const model = activeModel()
+    updateStep('send', { status: 'active', detail: `${model} · température 0.7` })
 
     const systemPrompt = ACTION_PROMPTS[action]
     const userMsg = action === 'merge' ? `Voici les cours à fusionner :\n\n${context}` : `Voici le cours :\n\n${context}`
-    const msgs = [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMsg }]
+    const msgs = [{ role: 'system', content: systemPrompt }, { role: 'user', content: buildUserContent(userMsg) }]
 
     await delay(200)
     updateStep('send', { status: 'done', detail: `Requête envoyée · ~${Math.round((systemPrompt.length + userMsg.length) / 4)} tokens estimés` })
@@ -165,7 +226,7 @@ export default function AIStudio() {
 
     cleanupRef.current?.()
     cleanupRef.current = api.ai.stream(
-      { apiKey: settings.mistralApiKey, messages: msgs, model: settings.mistralModel || 'open-mistral-7b' },
+      { apiKey: settings.mistralApiKey, messages: msgs, model },
       (chunk: string) => {
         tokenCount++
         accumulated += chunk
@@ -219,9 +280,11 @@ export default function AIStudio() {
     let reply = ''
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }])
 
+    const outgoingUserMessage = { role: 'user', content: buildUserContent(userMessage.content) }
+
     cleanupRef.current?.()
     cleanupRef.current = api.ai.stream(
-      { apiKey: settings.mistralApiKey, messages: [{ role: 'system', content: systemContent }, ...messages, userMessage], model: settings.mistralModel || 'open-mistral-7b' },
+      { apiKey: settings.mistralApiKey, messages: [{ role: 'system', content: systemContent }, ...messages, outgoingUserMessage], model: activeModel() },
       (chunk: string) => {
         reply += chunk
         setMessages((prev) => { const c = [...prev]; c[c.length - 1] = { role: 'assistant', content: reply }; return c })
@@ -336,6 +399,44 @@ export default function AIStudio() {
               <div className="empty-state" style={{ padding: 20 }}>
                 <BookOpen size={24} style={{ opacity: 0.3 }} />
                 <div style={{ fontSize: 12 }}>Aucun cours</div>
+              </div>
+            )}
+          </div>
+
+          {/* Attachments for the AI: screenshots and documents */}
+          <div style={{ borderTop: '1px solid var(--border)', padding: '10px 12px' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
+              Fournir à l'IA
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <button className="btn btn-secondary btn-sm" onClick={pickImages} disabled={taskRunning || attaching} style={{ flex: 1, fontSize: 11.5, padding: '5px 8px' }}>
+                <ImagePlus size={12} /> Capture
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={pickDoc} disabled={taskRunning || attaching} style={{ flex: 1, fontSize: 11.5, padding: '5px 8px' }}>
+                <FileUp size={12} /> Fichier
+              </button>
+            </div>
+            {(attachedImages.length > 0 || attachedDocs.length > 0) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {attachedImages.map((img, i) => (
+                  <div key={`img-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--accent-light)', background: 'var(--accent-dim)', padding: '3px 6px', borderRadius: 'var(--radius-sm)' }}>
+                    <ImagePlus size={11} style={{ flexShrink: 0 }} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{img.fileName}</span>
+                    <X size={11} style={{ cursor: 'pointer', flexShrink: 0 }} onClick={() => setAttachedImages((prev) => prev.filter((_, idx) => idx !== i))} />
+                  </div>
+                ))}
+                {attachedDocs.map((doc, i) => (
+                  <div key={`doc-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-secondary)', background: 'var(--bg-overlay)', padding: '3px 6px', borderRadius: 'var(--radius-sm)' }}>
+                    <FileUp size={11} style={{ flexShrink: 0 }} />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.fileName}</span>
+                    <X size={11} style={{ cursor: 'pointer', flexShrink: 0 }} onClick={() => setAttachedDocs((prev) => prev.filter((_, idx) => idx !== i))} />
+                  </div>
+                ))}
+              </div>
+            )}
+            {attachedImages.length > 0 && (
+              <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 6 }}>
+                Modèle vision utilisé automatiquement ({VISION_MODEL})
               </div>
             )}
           </div>
@@ -489,13 +590,14 @@ export default function AIStudio() {
       <style>{`
         @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
         .md-result { font-size: 14px; line-height: 1.7; color: var(--text-primary); user-select: text; }
-        .md-result h2 { font-size: 16px; font-weight: 700; margin: 18px 0 6px; color: var(--text-primary); }
-        .md-result h3 { font-size: 14px; font-weight: 600; margin: 14px 0 4px; color: var(--text-primary); }
+        .md-result h2 { font-size: 16px; font-weight: 700; margin: 18px 0 6px; color: var(--accent-light); }
+        .md-result h3 { font-size: 14px; font-weight: 600; margin: 14px 0 4px; color: #5eead4; }
         .md-result p { margin: 6px 0; }
         .md-result ul { margin: 6px 0 6px 18px; padding: 0; }
         .md-result li { margin: 3px 0; }
-        .md-result strong { font-weight: 700; color: var(--text-primary); }
-        .md-result em { font-style: italic; opacity: 0.85; }
+        .md-result li::marker { color: var(--accent-light); }
+        .md-result strong { font-weight: 700; color: #fbbf24; }
+        .md-result em { font-style: italic; color: #93c5fd; opacity: 0.95; }
         .md-cursor { display: inline-block; width: 2px; height: 14px; background: var(--accent); animation: blink 0.8s step-end infinite; vertical-align: middle; margin-left: 2px; border-radius: 1px; }
       `}</style>
     </div>

@@ -347,6 +347,24 @@ function registerIpc(): void {
     }
   })
 
+  // Pick one or more images (screenshots, photos of handwritten notes...) and
+  // return them as base64 data URLs, ready to send to a vision-capable model
+  ipcMain.handle('images:pick', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Ajouter des images',
+      properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }]
+    })
+    if (canceled || filePaths.length === 0) return []
+    return filePaths.map((filePath) => {
+      const ext = extname(filePath).slice(1).toLowerCase()
+      const mime = ext === 'jpg' ? 'jpeg' : ext
+      const buffer = readFileSync(filePath)
+      const fileName = filePath.split(/[\\/]/).pop() ?? filePath
+      return { fileName, dataUrl: `data:image/${mime};base64,${buffer.toString('base64')}` }
+    })
+  })
+
   const settingsPath = join(app.getPath('userData'), 'settings.json')
   ipcMain.handle('settings:get', () => { try { return JSON.parse(readFileSync(settingsPath, 'utf-8')) } catch { return {} } })
   ipcMain.handle('settings:set', (_, d) => { writeFileSync(settingsPath, JSON.stringify(d, null, 2)); return true })

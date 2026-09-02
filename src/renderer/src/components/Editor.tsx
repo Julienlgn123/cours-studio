@@ -13,12 +13,17 @@ import Subscript from '@tiptap/extension-subscript'
 import Superscript from '@tiptap/extension-superscript'
 import TextStyle from '@tiptap/extension-text-style'
 import Color from '@tiptap/extension-color'
+import Table from '@tiptap/extension-table'
+import TableRow from '@tiptap/extension-table-row'
+import TableCell from '@tiptap/extension-table-cell'
+import TableHeader from '@tiptap/extension-table-header'
+import Image from '@tiptap/extension-image'
 import {
   Bold, Italic, UnderlineIcon, Strikethrough, Highlighter,
   Heading1, Heading2, Heading3, List, ListOrdered, ListChecks,
   Code, Quote, Minus, Undo, Redo, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Link as LinkIcon, Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
-  Sigma, Keyboard, Palette
+  Sigma, Keyboard, Palette, Table as TableIcon, Image as ImageIcon
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { MathInline, MathBlock } from '../editor/math'
@@ -33,6 +38,15 @@ interface Props {
 }
 
 const TEXT_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9', '#e5e7eb']
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 export default function Editor({ content, onChange, readOnly = false }: Props) {
   const [showShortcuts, setShowShortcuts] = useState(false)
@@ -54,6 +68,11 @@ export default function Editor({ content, onChange, readOnly = false }: Props) {
       Superscript,
       TextStyle,
       Color,
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Image.configure({ inline: false, allowBase64: true }),
       MathInline,
       MathBlock,
       Indent,
@@ -63,6 +82,37 @@ export default function Editor({ content, onChange, readOnly = false }: Props) {
     editable: !readOnly,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML())
+    },
+    editorProps: {
+      handlePaste: (view, event) => {
+        const items = Array.from(event.clipboardData?.items ?? [])
+        const imageItem = items.find((i) => i.type.startsWith('image/'))
+        if (!imageItem) return false
+        const file = imageItem.getAsFile()
+        if (!file) return false
+        event.preventDefault()
+        fileToDataUrl(file).then((src) => {
+          const { schema } = view.state
+          const node = schema.nodes.image.create({ src })
+          const tr = view.state.tr.replaceSelectionWith(node)
+          view.dispatch(tr)
+        })
+        return true
+      },
+      handleDrop: (view, event) => {
+        const files = Array.from(event.dataTransfer?.files ?? []).filter((f) => f.type.startsWith('image/'))
+        if (files.length === 0) return false
+        event.preventDefault()
+        files.forEach((file) => {
+          fileToDataUrl(file).then((src) => {
+            const { schema } = view.state
+            const node = schema.nodes.image.create({ src })
+            const tr = view.state.tr.replaceSelectionWith(node)
+            view.dispatch(tr)
+          })
+        })
+        return true
+      }
     }
   })
 
@@ -196,6 +246,28 @@ export default function Editor({ content, onChange, readOnly = false }: Props) {
           title="Formule LaTeX (mathbb, frac, sqrt...)"
         >
           <Sigma size={14} />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          title="Insérer un tableau"
+        >
+          <TableIcon size={14} />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => {
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = 'image/*'
+            input.onchange = () => {
+              const file = input.files?.[0]
+              if (!file) return
+              fileToDataUrl(file).then((src) => editor.chain().focus().setImage({ src }).run())
+            }
+            input.click()
+          }}
+          title="Insérer une capture d'écran / image"
+        >
+          <ImageIcon size={14} />
         </ToolBtn>
 
         <div style={{ position: 'relative' }}>

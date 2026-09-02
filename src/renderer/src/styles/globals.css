@@ -775,6 +775,52 @@ button {
   height: 0;
 }
 
+/* Images / screenshots embedded in notes */
+.ProseMirror img {
+  max-width: 100%;
+  border-radius: var(--radius-md);
+  margin: 0.6em 0;
+  display: block;
+}
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
+/* Tables */
+.ProseMirror table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  overflow: hidden;
+}
+.ProseMirror th, .ProseMirror td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  vertical-align: top;
+  position: relative;
+  min-width: 60px;
+}
+.ProseMirror th {
+  background: var(--bg-overlay);
+  font-weight: 600;
+  text-align: left;
+  color: var(--text-primary);
+}
+.ProseMirror td > *, .ProseMirror th > * { margin-bottom: 0; }
+.ProseMirror .selectedCell {
+  background: var(--accent-dim);
+}
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.ProseMirror.resize-cursor { cursor: col-resize; }
+
 /* Recording bar */
 .recording-bar {
   display: flex;
