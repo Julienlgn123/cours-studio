@@ -19,10 +19,10 @@ interface AppStore {
   activeCourseId: string | null
   activeSubjectId: string | null
 
-  view: 'home' | 'subject' | 'editor' | 'ai' | 'quiz'
+  view: 'home' | 'subject' | 'editor' | 'ai' | 'quiz' | 'flashcards'
   sidebarCollapsed: boolean
   searchQuery: string
-  settings: { mistralApiKey?: string; mistralModel?: string }
+  settings: { mistralApiKey?: string; mistralModel?: string; theme?: 'dark' | 'light' }
 
   toast: { message: string; type: 'success' | 'error' | 'info' } | null
 

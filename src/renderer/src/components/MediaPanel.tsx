@@ -1,6 +1,9 @@
-import { Mic, Monitor, FolderOpen } from 'lucide-react'
+import { useState } from 'react'
+import { Mic, Monitor, FolderOpen, Captions } from 'lucide-react'
 import type { Course } from '../../../shared/types'
 import MediaPlayer from './MediaPlayer'
+import { useStore } from '../store'
+import { textToHtml } from '../utils/text'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
@@ -10,8 +13,28 @@ interface Props {
 }
 
 export default function MediaPanel({ course }: Props) {
+  const { settings, updateCourse, showToast } = useStore()
+  const [transcribing, setTranscribing] = useState(false)
   const hasAudio = !!course.audioPath
   const hasVideo = !!course.videoPath
+
+  async function transcribeAudio() {
+    if (!course.audioPath) return
+    if (!settings.mistralApiKey) { showToast('Configure ta clé API Mistral dans les paramètres', 'error'); return }
+    setTranscribing(true)
+    try {
+      const text = await api.transcribe({ apiKey: settings.mistralApiKey, filePath: course.audioPath })
+      if (!text.trim()) { showToast('Aucun texte détecté dans l\'audio', 'error'); return }
+      const html = textToHtml(text)
+      const newContent = course.content ? `${course.content}\n<h3>Transcription audio</h3>\n${html}` : `<h3>Transcription audio</h3>\n${html}`
+      await updateCourse(course.id, { content: newContent })
+      showToast('Transcription ajoutée aux notes', 'success')
+    } catch (err) {
+      showToast('Erreur de transcription : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setTranscribing(false)
+    }
+  }
 
   if (!hasAudio && !hasVideo) {
     return (
@@ -34,6 +57,15 @@ export default function MediaPanel({ course }: Props) {
           <div>
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--success)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Mic size={13} /> Audio
+              <button
+                className="btn btn-ghost btn-sm"
+                style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 500, textTransform: 'none' }}
+                onClick={transcribeAudio}
+                disabled={transcribing}
+              >
+                {transcribing ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <Captions size={12} />}
+                {transcribing ? 'Transcription...' : 'Transcrire en texte'}
+              </button>
             </div>
             <MediaPlayer type="audio" filePath={course.audioPath} />
           </div>

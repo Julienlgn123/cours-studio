@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, ArrowLeft, Clock, Mic, Monitor, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Search, ArrowLeft, Clock, Mic, Monitor, Edit2, Trash2, FileDown } from 'lucide-react'
 import { useStore } from '../store'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -7,6 +7,9 @@ import NewCourseModal from './NewCourseModal'
 import CourseEditModal from './CourseEditModal'
 import ContextMenu from './ContextMenu'
 import type { Course } from '../../../shared/types'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const api = (window as any).api
 
 export default function SubjectView() {
   const { subjects, courses, tags, activeSubjectId, setView, setActiveCourse, setActiveSubject, loadCourses, deleteCourse, searchQuery, setSearchQuery, showToast } = useStore()
@@ -32,6 +35,15 @@ export default function SubjectView() {
   function openCourse(id: string) {
     setActiveCourse(id)
     setView('editor')
+  }
+
+  async function exportSubjectPdf() {
+    if (!subject || subjectCourses.length === 0) return
+    const html = subjectCourses
+      .map((c) => `<h2>${c.emoji ?? '📝'} ${c.title}</h2>${c.content}<hr>`)
+      .join('\n')
+    const filePath = await api.exportPdf({ title: subject.name, html })
+    if (filePath) showToast('PDF exporté : ' + filePath, 'success')
   }
 
   async function handleDelete(id: string) {
@@ -64,6 +76,9 @@ export default function SubjectView() {
               placeholder="Rechercher..."
             />
           </div>
+          <button className="btn btn-secondary" onClick={exportSubjectPdf} disabled={subjectCourses.length === 0}>
+            <FileDown size={14} /> Exporter en PDF
+          </button>
           <button className="btn btn-primary" onClick={() => setShowNew(true)}>
             <Plus size={14} /> Nouveau cours
           </button>

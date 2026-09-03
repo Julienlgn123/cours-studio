@@ -7,23 +7,34 @@ import NewCourseModal from './NewCourseModal'
 import CourseEditModal from './CourseEditModal'
 import type { Course } from '../../../shared/types'
 
+const STALE_DAYS = 7
+
 export default function HomeView() {
-  const { subjects, courses, setView, setActiveCourse, loadCourses, searchQuery, setSearchQuery } = useStore()
+  const { subjects, courses, tags, setView, setActiveCourse, loadCourses, searchQuery, setSearchQuery } = useStore()
   const [showNew, setShowNew] = useState(false)
   const [editCourse, setEditCourse] = useState<Course | null>(null)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [reminderDismissed, setReminderDismissed] = useState(false)
 
   useEffect(() => { loadCourses() }, [])
 
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase()
-    if (!q) return courses.slice(0, 20)
-    return courses.filter((c) =>
+    let base = courses
+    if (tagFilter) base = base.filter((c) => c.tagIds?.includes(tagFilter))
+    if (!q) return base.slice(0, 20)
+    return base.filter((c) =>
       c.title.toLowerCase().includes(q) ||
       c.content.toLowerCase().includes(q)
     ).slice(0, 20)
-  }, [courses, searchQuery])
+  }, [courses, searchQuery, tagFilter])
 
   const recentCourses = courses.slice(0, 6)
+
+  const staleCourses = useMemo(() => {
+    const cutoff = Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000
+    return courses.filter((c) => c.updatedAt < cutoff)
+  }, [courses])
 
   function openCourse(id: string) {
     setActiveCourse(id)
@@ -66,11 +77,50 @@ export default function HomeView() {
         </div>
       </div>
 
+      {!reminderDismissed && staleCourses.length > 0 && !searchQuery && (
+        <div style={{
+          margin: '16px 32px 0', padding: '10px 16px', background: 'var(--warning-dim)', border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--warning)'
+        }}>
+          <Clock size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            {staleCourses.length} cours n'{staleCourses.length > 1 ? 'ont' : 'a'} pas été révisé{staleCourses.length > 1 ? 's' : ''} depuis plus de {STALE_DAYS} jours.
+          </span>
+          <button className="icon-btn" style={{ color: 'var(--warning)' }} onClick={() => setReminderDismissed(true)}>✕</button>
+        </div>
+      )}
+
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '16px 32px 0' }}>
+          <button
+            className="btn btn-sm"
+            onClick={() => setTagFilter(null)}
+            style={{ background: !tagFilter ? 'var(--accent-dim)' : 'var(--bg-overlay)', color: !tagFilter ? 'var(--accent-light)' : 'var(--text-secondary)', border: `1px solid ${!tagFilter ? 'var(--accent)' : 'var(--border)'}` }}
+          >
+            Tous les tags
+          </button>
+          {tags.map((tag) => (
+            <button
+              key={tag.id}
+              className="btn btn-sm"
+              onClick={() => setTagFilter(tagFilter === tag.id ? null : tag.id)}
+              style={{
+                background: tagFilter === tag.id ? `${tag.color}22` : 'var(--bg-overlay)',
+                color: tagFilter === tag.id ? tag.color : 'var(--text-secondary)',
+                border: `1px solid ${tagFilter === tag.id ? tag.color : 'var(--border)'}`
+              }}
+            >
+              {tag.emoji} {tag.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div style={{ flex: 1, overflow: 'auto', padding: '24px 32px' }}>
-        {searchQuery ? (
+        {(searchQuery || tagFilter) ? (
           <>
             <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
-              {filtered.length} résultat{filtered.length !== 1 ? 's' : ''} pour « {searchQuery} »
+              {filtered.length} résultat{filtered.length !== 1 ? 's' : ''}{searchQuery ? ` pour « ${searchQuery} »` : ''}
             </p>
             <div className="course-grid" style={{ padding: 0 }}>
               {filtered.map((c) => {

@@ -6,7 +6,9 @@ import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
   getCoursesBySubject, getCourse, createCourse, updateCourse, deleteCourse,
   getAllCourses, getVersions, createVersion,
   getTags, createTag, updateTag, deleteTag, setCourseTags,
-  getAttachments, createAttachment, deleteAttachment } from './db'
+  getAttachments, createAttachment, deleteAttachment,
+  getQuizResults, createQuizResult,
+  getFlashcards, getDueFlashcards, createFlashcards, reviewFlashcard, deleteFlashcard } from './db'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync, copyFileSync, statSync } from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
 import { pickAndExtractDocument } from './documents'
@@ -197,6 +199,40 @@ function registerIpc(): void {
   })
   ipcMain.handle('attachments:reveal', (_, filePath: string) => shell.showItemInFolder(filePath))
   ipcMain.handle('attachments:open', (_, filePath: string) => shell.openPath(filePath))
+
+  ipcMain.handle('quizResults:get', () => getQuizResults())
+  ipcMain.handle('quizResults:create', (_, d) => createQuizResult(d))
+
+  ipcMain.handle('flashcards:get', (_, courseId) => getFlashcards(courseId))
+  ipcMain.handle('flashcards:due', (_, courseId) => getDueFlashcards(courseId))
+  ipcMain.handle('flashcards:create', (_, courseId, cards) => createFlashcards(courseId, cards))
+  ipcMain.handle('flashcards:review', (_, id, grade) => { reviewFlashcard(id, grade); return true })
+  ipcMain.handle('flashcards:delete', (_, id) => { deleteFlashcard(id); return true })
+
+  // Audio transcription via Mistral's Voxtral speech-to-text model
+  ipcMain.handle('ai:transcribe', async (_, { apiKey, filePath }: { apiKey: string; filePath: string }) => {
+    if (!existsSync(filePath)) throw new Error('Fichier audio introuvable')
+    const buffer = readFileSync(filePath)
+    const fileName = filePath.split(/[\\/]/).pop() ?? 'audio.mp3'
+    const form = new FormData()
+    form.append('model', 'voxtral-mini-latest')
+    form.append('file', new Blob([buffer]), fileName)
+    const response = await fetch('https://api.mistral.ai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      body: form
+    })
+    if (!response.ok) {
+      let errText = await response.text()
+      try {
+        const parsed = JSON.parse(errText) as { message?: string }
+        if (parsed.message) errText = parsed.message
+      } catch { /* keep raw */ }
+      throw new Error(errText)
+    }
+    const data = await response.json() as { text?: string }
+    return data.text ?? ''
+  })
 
   ipcMain.handle('recording:getSources', async () => {
     const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] })

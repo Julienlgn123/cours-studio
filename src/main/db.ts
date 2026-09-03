@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
-import type { Subject, Course, CourseVersion, Tag, Attachment } from '../shared/types'
+import type { Subject, Course, CourseVersion, Tag, Attachment, QuizResult, Flashcard } from '../shared/types'
 
 let db: Database.Database
 
@@ -67,6 +67,27 @@ export function initDb(): void {
       file_name TEXT NOT NULL,
       file_path TEXT NOT NULL,
       size INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS quiz_results (
+      id TEXT PRIMARY KEY,
+      course_id TEXT REFERENCES courses(id) ON DELETE SET NULL,
+      topic TEXT NOT NULL,
+      score INTEGER NOT NULL,
+      total INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS flashcards (
+      id TEXT PRIMARY KEY,
+      course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      front TEXT NOT NULL,
+      back TEXT NOT NULL,
+      interval_days REAL NOT NULL DEFAULT 0,
+      ease REAL NOT NULL DEFAULT 2.5,
+      due_at INTEGER NOT NULL,
+      reps INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
   `)
@@ -228,6 +249,64 @@ export function deleteAttachment(id: string): Attachment | null {
   return rowToAttachment(row)
 }
 
+// ─── Quiz results ────────────────────────────────────────────────────────────
+
+export function getQuizResults(): QuizResult[] {
+  return (db.prepare('SELECT * FROM quiz_results ORDER BY created_at DESC LIMIT 200').all() as DbQuizResult[]).map(rowToQuizResult)
+}
+
+export function createQuizResult(data: Omit<QuizResult, 'id' | 'createdAt'>): QuizResult {
+  const id = generateId()
+  const now = Date.now()
+  db.prepare('INSERT INTO quiz_results (id, course_id, topic, score, total, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, data.courseId ?? null, data.topic, data.score, data.total, now)
+  return { id, ...data, createdAt: now }
+}
+
+// ─── Flashcards ──────────────────────────────────────────────────────────────
+
+export function getFlashcards(courseId: string): Flashcard[] {
+  return (db.prepare('SELECT * FROM flashcards WHERE course_id = ? ORDER BY due_at ASC').all(courseId) as DbFlashcard[]).map(rowToFlashcard)
+}
+
+export function getDueFlashcards(courseId: string): Flashcard[] {
+  return (db.prepare('SELECT * FROM flashcards WHERE course_id = ? AND due_at <= ? ORDER BY due_at ASC').all(courseId, Date.now()) as DbFlashcard[]).map(rowToFlashcard)
+}
+
+export function createFlashcards(courseId: string, cards: { front: string; back: string }[]): Flashcard[] {
+  const now = Date.now()
+  const insert = db.prepare('INSERT INTO flashcards (id, course_id, front, back, interval_days, ease, due_at, reps, created_at) VALUES (?, ?, ?, ?, 0, 2.5, ?, 0, ?)')
+  return cards.map((c) => {
+    const id = generateId()
+    insert.run(id, courseId, c.front, c.back, now, now)
+    return { id, courseId, front: c.front, back: c.back, intervalDays: 0, ease: 2.5, dueAt: now, reps: 0, createdAt: now }
+  })
+}
+
+// Simplified SM-2: grade 0 (again) resets, 1 (hard)/2 (good)/3 (easy) grow the interval
+export function reviewFlashcard(id: string, grade: 0 | 1 | 2 | 3): void {
+  const row = db.prepare('SELECT * FROM flashcards WHERE id = ?').get(id) as DbFlashcard | undefined
+  if (!row) return
+  let interval = row.interval_days
+  let ease = row.ease
+  if (grade === 0) {
+    interval = 0.02 // ~30 min
+    ease = Math.max(1.3, ease - 0.2)
+  } else {
+    if (row.reps === 0) interval = 1
+    else if (row.reps === 1) interval = 3
+    else interval = interval * ease
+    ease = Math.max(1.3, ease + (grade === 3 ? 0.15 : grade === 1 ? -0.15 : 0))
+  }
+  const dueAt = Date.now() + interval * 24 * 60 * 60 * 1000
+  db.prepare('UPDATE flashcards SET interval_days = ?, ease = ?, due_at = ?, reps = reps + 1 WHERE id = ?')
+    .run(interval, ease, dueAt, id)
+}
+
+export function deleteFlashcard(id: string): void {
+  db.prepare('DELETE FROM flashcards WHERE id = ?').run(id)
+}
+
 // ─── Row types & mappers ────────────────────────────────────────────────────
 
 interface DbSubject { id: string; name: string; emoji: string; color: string; created_at: number }
@@ -235,6 +314,16 @@ interface DbCourse  { id: string; subject_id: string; title: string; emoji: stri
 interface DbVersion { id: string; course_id: string; content: string; label: string; source: string; ai_action: string | null; created_at: number }
 interface DbTag { id: string; name: string; emoji: string; color: string; created_at: number }
 interface DbAttachment { id: string; course_id: string; file_name: string; file_path: string; size: number; created_at: number }
+interface DbQuizResult { id: string; course_id: string | null; topic: string; score: number; total: number; created_at: number }
+interface DbFlashcard { id: string; course_id: string; front: string; back: string; interval_days: number; ease: number; due_at: number; reps: number; created_at: number }
+
+function rowToQuizResult(row: DbQuizResult): QuizResult {
+  return { id: row.id, courseId: row.course_id ?? undefined, topic: row.topic, score: row.score, total: row.total, createdAt: row.created_at }
+}
+
+function rowToFlashcard(row: DbFlashcard): Flashcard {
+  return { id: row.id, courseId: row.course_id, front: row.front, back: row.back, intervalDays: row.interval_days, ease: row.ease, dueAt: row.due_at, reps: row.reps, createdAt: row.created_at }
+}
 
 function rowToTag(row: DbTag): Tag {
   return { id: row.id, name: row.name, emoji: row.emoji, color: row.color, createdAt: row.created_at }

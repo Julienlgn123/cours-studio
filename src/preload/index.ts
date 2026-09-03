@@ -41,6 +41,18 @@ const api = {
     getPathForFile: (file: File): string => webUtils.getPathForFile(file)
   },
   exportPdf: (data: { title: string; html: string }): Promise<string | null> => ipcRenderer.invoke('export:pdf', data),
+  quizResults: {
+    get: () => ipcRenderer.invoke('quizResults:get'),
+    create: (data: unknown) => ipcRenderer.invoke('quizResults:create', data)
+  },
+  flashcards: {
+    get: (courseId: string) => ipcRenderer.invoke('flashcards:get', courseId),
+    due: (courseId: string) => ipcRenderer.invoke('flashcards:due', courseId),
+    create: (courseId: string, cards: { front: string; back: string }[]) => ipcRenderer.invoke('flashcards:create', courseId, cards),
+    review: (id: string, grade: 0 | 1 | 2 | 3) => ipcRenderer.invoke('flashcards:review', id, grade),
+    delete: (id: string) => ipcRenderer.invoke('flashcards:delete', id)
+  },
+  transcribe: (data: { apiKey: string; filePath: string }): Promise<string> => ipcRenderer.invoke('ai:transcribe', data),
   recording: {
     getSources: () => ipcRenderer.invoke('recording:getSources'),
     save: (data: { subjectName: string; courseName: string; type: 'audio' | 'video'; buffer: number[] }) => ipcRenderer.invoke('recording:save', data),

@@ -1,4 +1,4 @@
-import { Minus, Square, X, Sparkles, Settings, HelpCircle } from 'lucide-react'
+import { Minus, Square, X, Sparkles, Settings, HelpCircle, Layers, Search } from 'lucide-react'
 import { useStore } from '../store'
 import SettingsModal from './SettingsModal'
 import { useState } from 'react'
@@ -22,6 +22,22 @@ export default function TitleBar() {
         <span className="titlebar-title">Cours Studio</span>
 
         <div className="titlebar-actions">
+          <button
+            className="icon-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}
+            data-tooltip="Rechercher (Ctrl+K)"
+            data-tooltip-dir="left-down"
+          >
+            <Search size={15} />
+          </button>
+          <button
+            className={`icon-btn ${view === 'flashcards' ? 'active' : ''}`}
+            onClick={() => setView(view === 'flashcards' ? 'home' : 'flashcards')}
+            data-tooltip="Flashcards"
+            data-tooltip-dir="left-down"
+          >
+            <Layers size={15} />
+          </button>
           <button
             className={`icon-btn ${view === 'ai' ? 'active' : ''}`}
             onClick={() => setView(view === 'ai' ? 'home' : 'ai')}

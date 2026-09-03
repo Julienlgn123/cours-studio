@@ -47,6 +47,27 @@ export interface Attachment {
   createdAt: number
 }
 
+export interface QuizResult {
+  id: string
+  courseId?: string
+  topic: string
+  score: number
+  total: number
+  createdAt: number
+}
+
+export interface Flashcard {
+  id: string
+  courseId: string
+  front: string
+  back: string
+  intervalDays: number
+  ease: number
+  dueAt: number
+  reps: number
+  createdAt: number
+}
+
 export interface Recording {
   type: 'audio' | 'video' | 'both'
   state: 'idle' | 'recording' | 'paused' | 'stopped'

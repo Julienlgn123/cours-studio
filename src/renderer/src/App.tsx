@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useStore } from './store'
 import TitleBar from './components/TitleBar'
@@ -8,17 +8,40 @@ import SubjectView from './components/SubjectView'
 import EditorView from './components/EditorView'
 import AIStudio from './components/AIStudio'
 import QuizStudio from './components/QuizStudio'
+import FlashcardStudio from './components/FlashcardStudio'
 import Toast from './components/Toast'
 import AIBanner from './components/AIBanner'
 import UpdatePromptModal from './components/UpdatePromptModal'
+import GlobalSearchModal from './components/GlobalSearchModal'
 
 export default function App() {
-  const { view, toast, loadSubjects, loadSettings, loadTags } = useStore()
+  const { view, toast, loadSubjects, loadSettings, loadTags, settings } = useStore()
+  const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
     loadSubjects()
     loadSettings()
     loadTags()
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', settings.theme === 'light' ? 'light' : 'dark')
+  }, [settings.theme])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setShowSearch((s) => !s)
+      }
+    }
+    function onOpenSearch() { setShowSearch(true) }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('open-global-search', onOpenSearch)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('open-global-search', onOpenSearch)
+    }
   }, [])
 
   return (
@@ -59,6 +82,12 @@ export default function App() {
                 <QuizStudio />
               </motion.div>
             )}
+            {view === 'flashcards' && (
+              <motion.div key="flashcards" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                <FlashcardStudio />
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
       </div>
@@ -66,6 +95,7 @@ export default function App() {
         {toast && <Toast key="toast" />}
       </AnimatePresence>
       <UpdatePromptModal />
+      {showSearch && <GlobalSearchModal onClose={() => setShowSearch(false)} />}
     </div>
   )
 }

@@ -1,7 +1,9 @@
-import { useState } from 'react'
-import { HelpCircle, ArrowLeft, BookOpen, Upload, X, CheckCircle2, XCircle, RotateCcw, FileText } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { HelpCircle, ArrowLeft, BookOpen, Upload, X, CheckCircle2, XCircle, RotateCcw, FileText, History } from 'lucide-react'
 import { useStore } from '../store'
-import type { QuizQuestion } from '../../../shared/types'
+import type { QuizQuestion, QuizResult } from '../../../shared/types'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
@@ -24,6 +26,8 @@ export default function QuizStudio() {
   const [quiz, setQuiz] = useState<QuizQuestion[] | null>(null)
   const [answers, setAnswers] = useState<(number | null)[]>([])
   const [revealed, setRevealed] = useState<boolean[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+  const [history, setHistory] = useState<QuizResult[]>([])
 
   function toggleCourse(id: string) {
     setSelectedCourseIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
@@ -123,6 +127,19 @@ Règles :
     ? quiz.reduce((acc, q, i) => acc + (answers[i] === q.correctIndex ? 1 : 0), 0)
     : null
 
+  useEffect(() => {
+    if (score === null || !quiz) return
+    const courseNames = selectedCourseIds.map((id) => courses.find((c) => c.id === id)?.title).filter(Boolean)
+    const resultTopic = topic.trim() || courseNames.join(', ') || 'Quiz'
+    api.quizResults.create({ courseId: selectedCourseIds[0], topic: resultTopic, score, total: quiz.length })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [score])
+
+  async function openHistory() {
+    setHistory(await api.quizResults.get())
+    setShowHistory(true)
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div className="page-header">
@@ -134,7 +151,44 @@ Règles :
             Mistral
           </span>
         </div>
+        <button className="btn btn-secondary btn-sm" onClick={openHistory}>
+          <History size={13} /> Historique
+        </button>
       </div>
+
+      {showHistory && (
+        <div className="modal-overlay" onClick={() => setShowHistory(false)}>
+          <div className="modal fade-in" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">Historique des quiz</span>
+              <button className="icon-btn" onClick={() => setShowHistory(false)}><X size={16} /></button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '60vh', overflow: 'auto' }}>
+              {history.length === 0 && (
+                <div className="empty-state" style={{ padding: 20 }}>
+                  <div style={{ fontSize: 12 }}>Aucun quiz fait pour l'instant</div>
+                </div>
+              )}
+              {history.map((h) => {
+                const pct = Math.round((h.score / h.total) * 100)
+                return (
+                  <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13 }}>{h.topic}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                        {format(new Date(h.createdAt), 'dd MMM yyyy · HH:mm', { locale: fr })}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--danger)' }}>
+                      {h.score}/{h.total}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {!quiz && (
         <div style={{ flex: 1, overflow: 'auto', padding: '24px 28px', maxWidth: 720, margin: '0 auto', width: '100%' }}>
