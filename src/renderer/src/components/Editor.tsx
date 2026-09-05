@@ -23,7 +23,7 @@ import {
   Heading1, Heading2, Heading3, List, ListOrdered, ListChecks,
   Code, Quote, Minus, Undo, Redo, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Link as LinkIcon, Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
-  Sigma, Keyboard, Palette, Table as TableIcon, Image as ImageIcon
+  Sigma, Keyboard, Palette, Table as TableIcon, Image as ImageIcon, Layers
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { MathInline, MathBlock } from '../editor/math'
@@ -35,6 +35,8 @@ interface Props {
   content: string
   onChange: (html: string) => void
   readOnly?: boolean
+  // When provided, a toolbar button turns the current selection into a flashcard
+  onQuickFlashcard?: (selectedText: string) => void
 }
 
 const TEXT_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9', '#e5e7eb']
@@ -48,7 +50,7 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-export default function Editor({ content, onChange, readOnly = false }: Props) {
+export default function Editor({ content, onChange, readOnly = false, onQuickFlashcard }: Props) {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
 
@@ -291,6 +293,19 @@ export default function Editor({ content, onChange, readOnly = false }: Props) {
             </div>
           )}
         </div>
+
+        {onQuickFlashcard && (
+          <ToolBtn
+            onClick={() => {
+              const { from, to } = editor.state.selection
+              const text = editor.state.doc.textBetween(from, to, ' ').trim()
+              onQuickFlashcard(text)
+            }}
+            title="Créer une flashcard depuis la sélection"
+          >
+            <Layers size={14} />
+          </ToolBtn>
+        )}
 
         <div className="editor-toolbar-sep" />
 

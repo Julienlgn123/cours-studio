@@ -14,14 +14,22 @@ import AIBanner from './components/AIBanner'
 import UpdatePromptModal from './components/UpdatePromptModal'
 import GlobalSearchModal from './components/GlobalSearchModal'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const api = (window as any).api
+
 export default function App() {
-  const { view, toast, loadSubjects, loadSettings, loadTags, settings } = useStore()
+  const { view, toast, loadSubjects, loadSettings, loadTags, settings, openGlobalReview } = useStore()
   const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
     loadSubjects()
     loadSettings()
     loadTags()
+  }, [])
+
+  useEffect(() => {
+    const cleanup = api.app.onReviewAll(() => openGlobalReview())
+    return cleanup
   }, [])
 
   useEffect(() => {

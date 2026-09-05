@@ -22,6 +22,8 @@ interface AppStore {
   view: 'home' | 'subject' | 'editor' | 'ai' | 'quiz' | 'flashcards'
   sidebarCollapsed: boolean
   searchQuery: string
+  // When true, the Flashcards view opens straight into the global review session
+  flashcardsWantAll: boolean
   settings: { mistralApiKey?: string; mistralModel?: string; theme?: 'dark' | 'light' }
 
   toast: { message: string; type: 'success' | 'error' | 'info' } | null
@@ -46,6 +48,8 @@ interface AppStore {
   setActiveSubject: (id: string | null) => void
   setView: (view: AppStore['view']) => void
   setSearchQuery: (q: string) => void
+  openGlobalReview: () => void
+  clearFlashcardsWantAll: () => void
   loadSettings: () => Promise<void>
   saveSettings: (s: AppStore['settings']) => Promise<void>
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void
@@ -70,6 +74,7 @@ export const useStore = create<AppStore>((set, get) => ({
   view: 'home',
   sidebarCollapsed: false,
   searchQuery: '',
+  flashcardsWantAll: false,
   settings: {},
   toast: null,
   aiTask: null,
@@ -153,6 +158,8 @@ export const useStore = create<AppStore>((set, get) => ({
   setActiveSubject: (id) => set({ activeSubjectId: id }),
   setView: (view) => set({ view }),
   setSearchQuery: (q) => set({ searchQuery: q }),
+  openGlobalReview: () => set({ flashcardsWantAll: true, view: 'flashcards' }),
+  clearFlashcardsWantAll: () => set({ flashcardsWantAll: false }),
 
   loadSettings: async () => { const settings = await api.settings.get(); set({ settings }) },
   saveSettings: async (settings) => { await api.settings.set(settings); set({ settings }) },

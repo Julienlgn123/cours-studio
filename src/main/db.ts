@@ -4,14 +4,29 @@ import { join } from 'path'
 import type { Subject, Course, CourseVersion, Tag, Attachment, QuizResult, Flashcard } from '../shared/types'
 
 let db: Database.Database
+let currentDbPath = ''
 
 function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
 
+export function getDbPath(): string {
+  return currentDbPath
+}
+
+// Flush the WAL into the main .db file so a file-copy backup is complete
+export function checkpointDb(): void {
+  try { db.pragma('wal_checkpoint(TRUNCATE)') } catch { /* ok */ }
+}
+
+export function closeDb(): void {
+  try { db.close() } catch { /* ok */ }
+}
+
 export function initDb(): void {
   // Must be called after app.whenReady() so app.getPath works correctly
   const dbPath = join(app.getPath('userData'), 'cours-studio.db')
+  currentDbPath = dbPath
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
@@ -271,6 +286,29 @@ export function getFlashcards(courseId: string): Flashcard[] {
 
 export function getDueFlashcards(courseId: string): Flashcard[] {
   return (db.prepare('SELECT * FROM flashcards WHERE course_id = ? AND due_at <= ? ORDER BY due_at ASC').all(courseId, Date.now()) as DbFlashcard[]).map(rowToFlashcard)
+}
+
+// All flashcards due right now, across every course (global review session)
+export function getAllDueFlashcards(): Flashcard[] {
+  return (db.prepare('SELECT * FROM flashcards WHERE due_at <= ? ORDER BY due_at ASC').all(Date.now()) as DbFlashcard[]).map(rowToFlashcard)
+}
+
+export function countAllDueFlashcards(): number {
+  const row = db.prepare('SELECT COUNT(*) AS n FROM flashcards WHERE due_at <= ?').get(Date.now()) as { n: number }
+  return row.n
+}
+
+// Every flashcard, optionally scoped to one course — used by the Anki export
+export function getFlashcardsForExport(courseId?: string): Array<Flashcard & { courseTitle: string; subjectName: string }> {
+  const sql = `
+    SELECT f.*, c.title AS course_title, s.name AS subject_name
+    FROM flashcards f
+    JOIN courses c ON c.id = f.course_id
+    JOIN subjects s ON s.id = c.subject_id
+    ${courseId ? 'WHERE f.course_id = ?' : ''}
+    ORDER BY s.name, c.title, f.created_at`
+  const rows = (courseId ? db.prepare(sql).all(courseId) : db.prepare(sql).all()) as Array<DbFlashcard & { course_title: string; subject_name: string }>
+  return rows.map((r) => ({ ...rowToFlashcard(r), courseTitle: r.course_title, subjectName: r.subject_name }))
 }
 
 export function createFlashcards(courseId: string, cards: { front: string; back: string }[]): Flashcard[] {

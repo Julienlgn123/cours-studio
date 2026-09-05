@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, desktopCapturer, protocol, net, dialog } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, desktopCapturer, protocol, net, dialog, Notification } from 'electron'
 import { join, extname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
@@ -8,10 +8,13 @@ import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
   getTags, createTag, updateTag, deleteTag, setCourseTags,
   getAttachments, createAttachment, deleteAttachment,
   getQuizResults, createQuizResult,
-  getFlashcards, getDueFlashcards, createFlashcards, reviewFlashcard, deleteFlashcard } from './db'
+  getFlashcards, getDueFlashcards, getAllDueFlashcards, countAllDueFlashcards,
+  getFlashcardsForExport, createFlashcards, reviewFlashcard, deleteFlashcard } from './db'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync, copyFileSync, statSync } from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
 import { pickAndExtractDocument } from './documents'
+import { exportBackup, importBackup, autoBackup, openBackupsFolder, latestBackupInfo } from './backup'
+import { htmlToMarkdown } from './markdown'
 
 // Cross-platform ffmpeg binary name
 const ffmpegBin = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
@@ -97,9 +100,25 @@ app.whenReady().then(() => {
   })
 
   initDb()
+  autoBackup()
   registerIpc()
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
+
+  // Nudge the user if flashcards are waiting to be reviewed
+  try {
+    const due = countAllDueFlashcards()
+    if (due > 0 && Notification.isSupported()) {
+      const n = new Notification({
+        title: 'Cours Studio — révisions',
+        body: `${due} flashcard${due > 1 ? 's' : ''} à réviser aujourd'hui.`
+      })
+      n.on('click', () => {
+        if (mainWindow) { mainWindow.show(); mainWindow.webContents.send('open-review-all') }
+      })
+      n.show()
+    }
+  } catch { /* notifications are best-effort */ }
 
   // Auto-updater (only when packaged)
   if (app.isPackaged) {
@@ -205,9 +224,29 @@ function registerIpc(): void {
 
   ipcMain.handle('flashcards:get', (_, courseId) => getFlashcards(courseId))
   ipcMain.handle('flashcards:due', (_, courseId) => getDueFlashcards(courseId))
+  ipcMain.handle('flashcards:dueAll', () => getAllDueFlashcards())
   ipcMain.handle('flashcards:create', (_, courseId, cards) => createFlashcards(courseId, cards))
   ipcMain.handle('flashcards:review', (_, id, grade) => { reviewFlashcard(id, grade); return true })
   ipcMain.handle('flashcards:delete', (_, id) => { deleteFlashcard(id); return true })
+
+  // Export flashcards as an Anki-friendly file (tab-separated, HTML allowed)
+  ipcMain.handle('flashcards:exportAnki', async (_, courseId?: string) => {
+    const cards = getFlashcardsForExport(courseId)
+    if (!cards.length) throw new Error('Aucune flashcard à exporter.')
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Exporter vers Anki',
+      defaultPath: `flashcards-cours-studio-${new Date().toISOString().slice(0, 10)}.txt`,
+      filters: [{ name: 'Texte Anki', extensions: ['txt'] }]
+    })
+    if (canceled || !filePath) return null
+    const esc = (s: string): string => s.replace(/\t/g, ' ').replace(/\r?\n/g, '<br>').trim()
+    const header = '#separator:tab\n#html:true\n#tags column:3\n'
+    const body = cards
+      .map((c) => `${esc(c.front)}\t${esc(c.back)}\t${esc(`${c.subjectName}::${c.courseTitle}`)}`)
+      .join('\n')
+    writeFileSync(filePath, header + body, 'utf-8')
+    return { filePath, count: cards.length }
+  })
 
   // Audio transcription via Mistral's Voxtral speech-to-text model
   ipcMain.handle('ai:transcribe', async (_, { apiKey, filePath }: { apiKey: string; filePath: string }) => {
@@ -382,6 +421,25 @@ function registerIpc(): void {
     writeFileSync(filePath, buffer)
     return filePath
   })
+
+  // Export a single course as a Markdown (.md) file
+  ipcMain.handle('export:markdown', async (_, { title, html }: { title: string; html: string }) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Exporter en Markdown',
+      defaultPath: `${(title || 'cours').replace(/[<>:"/\\|?*\x00-\x1f]/g, '-')}.md`,
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    })
+    if (canceled || !filePath) return null
+    const md = `# ${title}\n\n${htmlToMarkdown(html)}\n`
+    writeFileSync(filePath, md, 'utf-8')
+    return filePath
+  })
+
+  // Backup / restore of the whole local data set
+  ipcMain.handle('backup:export', () => exportBackup(mainWindow))
+  ipcMain.handle('backup:import', () => importBackup(mainWindow))
+  ipcMain.handle('backup:openFolder', () => { openBackupsFolder(); return true })
+  ipcMain.handle('backup:latest', () => latestBackupInfo())
 
   // Document import: pick a file (pdf/docx/odt/txt) and extract its plain text
   ipcMain.handle('documents:import', async () => {

@@ -41,6 +41,13 @@ const api = {
     getPathForFile: (file: File): string => webUtils.getPathForFile(file)
   },
   exportPdf: (data: { title: string; html: string }): Promise<string | null> => ipcRenderer.invoke('export:pdf', data),
+  exportMarkdown: (data: { title: string; html: string }): Promise<string | null> => ipcRenderer.invoke('export:markdown', data),
+  backup: {
+    export: (): Promise<string | null> => ipcRenderer.invoke('backup:export'),
+    import: (): Promise<boolean> => ipcRenderer.invoke('backup:import'),
+    openFolder: (): Promise<boolean> => ipcRenderer.invoke('backup:openFolder'),
+    latest: (): Promise<{ name: string; at: number } | null> => ipcRenderer.invoke('backup:latest')
+  },
   quizResults: {
     get: () => ipcRenderer.invoke('quizResults:get'),
     create: (data: unknown) => ipcRenderer.invoke('quizResults:create', data)
@@ -48,9 +55,11 @@ const api = {
   flashcards: {
     get: (courseId: string) => ipcRenderer.invoke('flashcards:get', courseId),
     due: (courseId: string) => ipcRenderer.invoke('flashcards:due', courseId),
+    dueAll: () => ipcRenderer.invoke('flashcards:dueAll'),
     create: (courseId: string, cards: { front: string; back: string }[]) => ipcRenderer.invoke('flashcards:create', courseId, cards),
     review: (id: string, grade: 0 | 1 | 2 | 3) => ipcRenderer.invoke('flashcards:review', id, grade),
-    delete: (id: string) => ipcRenderer.invoke('flashcards:delete', id)
+    delete: (id: string) => ipcRenderer.invoke('flashcards:delete', id),
+    exportAnki: (courseId?: string): Promise<{ filePath: string; count: number } | null> => ipcRenderer.invoke('flashcards:exportAnki', courseId)
   },
   transcribe: (data: { apiKey: string; filePath: string }): Promise<string> => ipcRenderer.invoke('ai:transcribe', data),
   recording: {
@@ -130,6 +139,11 @@ const api = {
       const handler = (_: unknown, err: string) => cb(err)
       ipcRenderer.on('update:error', handler)
       return () => ipcRenderer.removeListener('update:error', handler)
+    },
+    // Fired when the user clicks the "flashcards due" system notification
+    onReviewAll: (cb: () => void) => {
+      ipcRenderer.on('open-review-all', cb)
+      return () => ipcRenderer.removeListener('open-review-all', cb)
     }
   }
 }

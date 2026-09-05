@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { X, Eye, EyeOff, Download, RefreshCw, CheckCircle, Sun, Moon } from 'lucide-react'
+import { X, Eye, EyeOff, Download, RefreshCw, CheckCircle, Sun, Moon, Upload, FolderOpen, Save } from 'lucide-react'
 import { useStore } from '../store'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
@@ -19,6 +21,8 @@ export default function SettingsModal({ onClose }: Props) {
   const [saving, setSaving] = useState(false)
 
   const [appVersion, setAppVersion] = useState<string>('')
+  const [backupBusy, setBackupBusy] = useState<'' | 'export' | 'import'>('')
+  const [lastBackup, setLastBackup] = useState<{ name: string; at: number } | null>(null)
   const [updateState, setUpdateState] = useState<UpdateState>('idle')
   const [updateVersion, setUpdateVersion] = useState<string>('')
   const [updateProgress, setUpdateProgress] = useState(0)
@@ -26,6 +30,7 @@ export default function SettingsModal({ onClose }: Props) {
 
   useEffect(() => {
     api.app.version().then(setAppVersion).catch(() => setAppVersion('dev'))
+    api.backup.latest().then(setLastBackup).catch(() => setLastBackup(null))
 
     const cleanups = [
       api.app.onUpdateAvailable(({ version }: { version: string }) => {
@@ -48,6 +53,33 @@ export default function SettingsModal({ onClose }: Props) {
       onClose()
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleExportBackup() {
+    setBackupBusy('export')
+    try {
+      const path = await api.backup.export()
+      if (path) {
+        showToast('Sauvegarde exportée', 'success')
+        api.backup.latest().then(setLastBackup).catch(() => {})
+      }
+    } catch (err) {
+      showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setBackupBusy('')
+    }
+  }
+
+  async function handleImportBackup() {
+    setBackupBusy('import')
+    try {
+      await api.backup.import()
+      // On success the app relaunches; if we get here the user cancelled
+    } catch (err) {
+      showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setBackupBusy('')
     }
   }
 
@@ -117,6 +149,30 @@ export default function SettingsModal({ onClose }: Props) {
                 style={{ flex: 1, justifyContent: 'center', background: settings.theme === 'light' ? 'var(--accent-dim)' : 'var(--bg-overlay)', color: settings.theme === 'light' ? 'var(--accent-light)' : 'var(--text-secondary)' }}
               >
                 <Sun size={13} /> Clair
+              </button>
+            </div>
+          </div>
+
+          {/* Backup section */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2 }}>Sauvegarde</div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10 }}>
+              Tes cours, médias et réglages sont sur cet ordinateur uniquement. Exporte une archive régulièrement.
+              {lastBackup && (
+                <> Dernière copie&nbsp;: <strong>{format(new Date(lastBackup.at), 'dd MMM à HH:mm', { locale: fr })}</strong>.</>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button className="btn btn-secondary btn-sm" onClick={handleExportBackup} disabled={backupBusy !== ''}>
+                {backupBusy === 'export' ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Save size={13} />}
+                Exporter (.zip)
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={handleImportBackup} disabled={backupBusy !== ''}>
+                {backupBusy === 'import' ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Upload size={13} />}
+                Restaurer
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => api.backup.openFolder()}>
+                <FolderOpen size={13} /> Dossier
               </button>
             </div>
           </div>

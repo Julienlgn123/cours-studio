@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Layers, ArrowLeft, BookOpen, Sparkles, RotateCcw } from 'lucide-react'
+import { Layers, ArrowLeft, BookOpen, Sparkles, RotateCcw, Download, Globe } from 'lucide-react'
 import { useStore } from '../store'
 import type { Flashcard } from '../../../shared/types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
 
+const ALL = '__all__'
+
 export default function FlashcardStudio() {
-  const { courses, subjects, settings, setView, showToast } = useStore()
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
+  const { courses, subjects, settings, setView, showToast, flashcardsWantAll, clearFlashcardsWantAll } = useStore()
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(flashcardsWantAll ? ALL : null)
   const [allCards, setAllCards] = useState<Flashcard[]>([])
   const [dueCards, setDueCards] = useState<Flashcard[]>([])
   const [index, setIndex] = useState(0)
@@ -16,7 +18,13 @@ export default function FlashcardStudio() {
   const [generating, setGenerating] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  const isAll = selectedCourseId === ALL
   const course = courses.find((c) => c.id === selectedCourseId)
+
+  useEffect(() => {
+    if (flashcardsWantAll) clearFlashcardsWantAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!selectedCourseId) return
@@ -28,12 +36,18 @@ export default function FlashcardStudio() {
     if (!selectedCourseId) return
     setLoading(true)
     try {
-      const [all, due] = await Promise.all([
-        api.flashcards.get(selectedCourseId),
-        api.flashcards.due(selectedCourseId)
-      ])
-      setAllCards(all)
-      setDueCards(due)
+      if (isAll) {
+        const due = await api.flashcards.dueAll()
+        setAllCards([])
+        setDueCards(due)
+      } else {
+        const [all, due] = await Promise.all([
+          api.flashcards.get(selectedCourseId),
+          api.flashcards.due(selectedCourseId)
+        ])
+        setAllCards(all)
+        setDueCards(due)
+      }
       setIndex(0)
       setFlipped(false)
     } finally {
@@ -73,6 +87,15 @@ Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaqu
     }
   }
 
+  async function exportAnki() {
+    try {
+      const res = await api.flashcards.exportAnki(isAll ? undefined : selectedCourseId ?? undefined)
+      if (res) showToast(`${res.count} flashcards exportées vers Anki`, 'success')
+    } catch (err) {
+      showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    }
+  }
+
   async function grade(g: 0 | 1 | 2 | 3) {
     const card = dueCards[index]
     if (!card) return
@@ -86,6 +109,8 @@ Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaqu
   }
 
   const currentCard = dueCards[index]
+  const currentCourse = currentCard ? courses.find((c) => c.id === currentCard.courseId) : undefined
+  const currentSubject = currentCourse ? subjects.find((s) => s.id === currentCourse.subjectId) : undefined
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -95,10 +120,24 @@ Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaqu
           <Layers size={16} style={{ color: 'var(--accent)' }} />
           <h1 className="page-header-title">Flashcards</h1>
         </div>
+        <div className="page-header-right">
+          <button className="btn btn-secondary btn-sm" onClick={exportAnki} data-tooltip="Exporter au format Anki" data-tooltip-dir="down">
+            <Download size={13} /> Anki
+          </button>
+        </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         <div style={{ width: 220, borderRight: '1px solid var(--border)', overflow: 'auto', padding: '6px 8px' }}>
+          <div
+            className={`sidebar-item ${isAll ? 'active' : ''}`}
+            onClick={() => setSelectedCourseId(ALL)}
+            style={{ marginBottom: 8 }}
+          >
+            <Globe size={14} style={{ color: 'var(--accent)' }} />
+            <span className="sidebar-item-name" style={{ fontSize: 12.5, fontWeight: 600 }}>Réviser tout</span>
+          </div>
+
           {subjects.map((subject) => {
             const subjectCourses = courses.filter((c) => c.subjectId === subject.id)
             if (subjectCourses.length === 0) return null
@@ -131,15 +170,23 @@ Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaqu
         </div>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          {!course && (
+          {!course && !isAll && (
             <div className="empty-state">
               <Layers size={28} style={{ opacity: 0.3 }} />
               <div className="empty-state-title">Choisis un cours</div>
-              <div className="empty-state-desc">Sélectionne un cours à gauche pour réviser ou générer des flashcards.</div>
+              <div className="empty-state-desc">Sélectionne « Réviser tout » ou un cours à gauche pour réviser ou générer des flashcards.</div>
             </div>
           )}
 
-          {course && !loading && allCards.length === 0 && (
+          {isAll && !loading && dueCards.length === 0 && (
+            <div className="empty-state">
+              <div style={{ fontSize: 30 }}>🎉</div>
+              <div className="empty-state-title">Tout est révisé</div>
+              <div className="empty-state-desc">Aucune flashcard à réviser maintenant, toutes matières confondues. Reviens plus tard.</div>
+            </div>
+          )}
+
+          {course && !isAll && !loading && allCards.length === 0 && (
             <div className="empty-state">
               <div style={{ fontSize: 30 }}>🗂️</div>
               <div className="empty-state-title">Aucune flashcard pour ce cours</div>
@@ -151,7 +198,7 @@ Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaqu
             </div>
           )}
 
-          {course && allCards.length > 0 && dueCards.length === 0 && (
+          {course && !isAll && allCards.length > 0 && dueCards.length === 0 && (
             <div className="empty-state">
               <div style={{ fontSize: 30 }}>✅</div>
               <div className="empty-state-title">Rien à réviser maintenant</div>
@@ -165,8 +212,13 @@ Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaqu
 
           {currentCard && (
             <div style={{ width: '100%', maxWidth: 520, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14 }}>
-                Carte {index + 1} / {dueCards.length}
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+                {isAll && currentCourse && (
+                  <span style={{ color: currentSubject?.color ?? 'var(--accent)', fontWeight: 500 }}>
+                    {currentSubject?.emoji} {currentCourse.title}
+                  </span>
+                )}
+                <span>Carte {index + 1} / {dueCards.length}</span>
               </div>
               <div
                 onClick={() => setFlipped(!flipped)}
@@ -193,7 +245,7 @@ Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaqu
             </div>
           )}
 
-          {course && allCards.length > 0 && (
+          {((course && !isAll && allCards.length > 0) || (isAll && dueCards.length > 0)) && (
             <button className="btn btn-ghost btn-sm" onClick={load} style={{ marginTop: 16 }}>
               <RotateCcw size={12} /> Rafraîchir
             </button>

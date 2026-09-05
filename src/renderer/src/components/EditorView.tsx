@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown, FileText, List } from 'lucide-react'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
@@ -23,7 +23,28 @@ export default function EditorView() {
   const [showRecording, setShowRecording] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [activeTab, setActiveTab] = useState<'editor' | 'versions' | 'media' | 'files'>('editor')
+  const [showOutline, setShowOutline] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const editorAreaRef = useRef<HTMLDivElement | null>(null)
+
+  const headings = useMemo(() => {
+    try {
+      const doc = new DOMParser().parseFromString(content || '', 'text/html')
+      return Array.from(doc.querySelectorAll('h1, h2, h3')).map((el, i) => ({
+        i,
+        level: Number(el.tagName[1]),
+        text: (el.textContent || '').trim() || 'Sans titre'
+      }))
+    } catch {
+      return []
+    }
+  }, [content])
+
+  function scrollToHeading(i: number) {
+    const nodes = editorAreaRef.current?.querySelectorAll('.ProseMirror h1, .ProseMirror h2, .ProseMirror h3')
+    const el = nodes?.[i] as HTMLElement | undefined
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   useEffect(() => {
     if (course) {
@@ -63,6 +84,24 @@ export default function EditorView() {
   async function exportPdf() {
     const filePath = await api.exportPdf({ title, html: content })
     if (filePath) showToast('PDF exporté : ' + filePath, 'success')
+  }
+
+  async function exportMarkdown() {
+    const filePath = await api.exportMarkdown({ title, html: content })
+    if (filePath) showToast('Markdown exporté : ' + filePath, 'success')
+  }
+
+  async function quickFlashcard(text: string) {
+    if (!activeCourseId) return
+    if (!text) { showToast('Sélectionne d\'abord du texte dans le cours', 'info'); return }
+    const front = window.prompt('Question de la flashcard (le texte sélectionné servira de réponse) :', '')
+    if (front === null || !front.trim()) return
+    try {
+      await api.flashcards.create(activeCourseId, [{ front: front.trim(), back: text }])
+      showToast('Flashcard créée', 'success')
+    } catch (err) {
+      showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    }
   }
 
   function goBack() {
@@ -132,8 +171,19 @@ export default function EditorView() {
           <button className="icon-btn" onClick={forceSave} data-tooltip="Sauvegarder (Ctrl+S)" data-tooltip-dir="left-down">
             <Save size={15} />
           </button>
+          <button
+            className={`icon-btn ${showOutline ? 'active' : ''}`}
+            onClick={() => setShowOutline((v) => !v)}
+            data-tooltip="Plan du cours"
+            data-tooltip-dir="left-down"
+          >
+            <List size={15} />
+          </button>
           <button className="icon-btn" onClick={exportPdf} data-tooltip="Exporter en PDF" data-tooltip-dir="left-down">
             <FileDown size={15} />
+          </button>
+          <button className="icon-btn" onClick={exportMarkdown} data-tooltip="Exporter en Markdown" data-tooltip-dir="left-down">
+            <FileText size={15} />
           </button>
           <button className="icon-btn" onClick={() => setShowDeleteConfirm(true)} data-tooltip="Supprimer ce cours" data-tooltip-dir="left-down" style={{ color: 'var(--danger, #ef4444)' }}>
             <Trash2 size={15} />
@@ -202,15 +252,43 @@ export default function EditorView() {
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
         {activeTab === 'editor' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div className="editor-area" style={{ flex: 1, overflow: 'auto', paddingTop: 24 }}>
-              <div style={{ maxWidth: 760, margin: '0 auto', padding: '0 16px' }}>
-                <input
-                  className="editor-title-input"
-                  value={title}
-                  onChange={(e) => handleTitleChange(e.target.value)}
-                  placeholder="Titre du cours..."
-                />
-                <Editor content={content} onChange={handleContentChange} />
+            <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              {showOutline && (
+                <div style={{
+                  width: 220, flexShrink: 0, borderRight: '1px solid var(--border)', overflow: 'auto',
+                  padding: '20px 10px', fontSize: 12.5
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '0 6px 8px' }}>
+                    Plan
+                  </div>
+                  {headings.length === 0 && (
+                    <div style={{ padding: '4px 6px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                      Ajoute des titres (H1, H2, H3) pour voir le plan du cours ici.
+                    </div>
+                  )}
+                  {headings.map((h) => (
+                    <div
+                      key={h.i}
+                      onClick={() => scrollToHeading(h.i)}
+                      className="sidebar-item"
+                      style={{ paddingLeft: 6 + (h.level - 1) * 12, color: 'var(--text-secondary)' }}
+                      title={h.text}
+                    >
+                      <span className="sidebar-item-name" style={{ fontSize: 12.5 }}>{h.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div ref={editorAreaRef} className="editor-area" style={{ flex: 1, overflow: 'auto', paddingTop: 24 }}>
+                <div style={{ maxWidth: 760, margin: '0 auto', padding: '0 16px' }}>
+                  <input
+                    className="editor-title-input"
+                    value={title}
+                    onChange={(e) => handleTitleChange(e.target.value)}
+                    placeholder="Titre du cours..."
+                  />
+                  <Editor content={content} onChange={handleContentChange} onQuickFlashcard={quickFlashcard} />
+                </div>
               </div>
             </div>
             {showRecording && (

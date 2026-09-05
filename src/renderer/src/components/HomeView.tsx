@@ -1,6 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Plus, Search, Clock, Mic, Monitor, Edit2 } from 'lucide-react'
+import { Plus, Search, Clock, Mic, Monitor, Edit2, Layers } from 'lucide-react'
 import { useStore } from '../store'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const api = (window as any).api
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import NewCourseModal from './NewCourseModal'
@@ -10,13 +13,17 @@ import type { Course } from '../../../shared/types'
 const STALE_DAYS = 7
 
 export default function HomeView() {
-  const { subjects, courses, tags, setView, setActiveCourse, loadCourses, searchQuery, setSearchQuery } = useStore()
+  const { subjects, courses, tags, setView, setActiveCourse, loadCourses, searchQuery, setSearchQuery, openGlobalReview } = useStore()
   const [showNew, setShowNew] = useState(false)
   const [editCourse, setEditCourse] = useState<Course | null>(null)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [reminderDismissed, setReminderDismissed] = useState(false)
+  const [dueCount, setDueCount] = useState(0)
 
-  useEffect(() => { loadCourses() }, [])
+  useEffect(() => {
+    loadCourses()
+    api.flashcards.dueAll().then((cards: unknown[]) => setDueCount(cards.length)).catch(() => setDueCount(0))
+  }, [])
 
   const filtered = useMemo(() => {
     const q = searchQuery.toLowerCase()
@@ -76,6 +83,19 @@ export default function HomeView() {
           )}
         </div>
       </div>
+
+      {dueCount > 0 && !searchQuery && (
+        <div style={{
+          margin: '16px 32px 0', padding: '10px 16px', background: 'var(--accent-dim)', border: '1px solid var(--accent)',
+          borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--accent-light)'
+        }}>
+          <Layers size={14} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            {dueCount} flashcard{dueCount > 1 ? 's' : ''} à réviser aujourd'hui, toutes matières confondues.
+          </span>
+          <button className="btn btn-primary btn-sm" onClick={openGlobalReview}>Réviser</button>
+        </div>
+      )}
 
       {!reminderDismissed && staleCourses.length > 0 && !searchQuery && (
         <div style={{
