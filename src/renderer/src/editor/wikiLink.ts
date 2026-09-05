@@ -1,8 +1,13 @@
 import { Extension } from '@tiptap/core'
 import Suggestion from '@tiptap/suggestion'
+import { PluginKey } from '@tiptap/pm/state'
 import { ReactRenderer } from '@tiptap/react'
 import type { Editor, Range } from '@tiptap/core'
 import WikiMenuList, { type WikiMenuListRef, type WikiItem } from '../components/WikiMenuList'
+
+// Must differ from the slash-menu's suggestion plugin key, otherwise ProseMirror
+// throws "Adding different instances of a keyed plugin (suggestion)".
+const wikiLinkPluginKey = new PluginKey('wikiLinkSuggestion')
 
 // The course list changes as the user creates/renames courses, but the editor
 // extension is built once. Keep the current list in module state and let the
@@ -19,6 +24,7 @@ export const WikiLink = Extension.create({
     return [
       Suggestion({
         editor: this.editor,
+        pluginKey: wikiLinkPluginKey,
         char: '[[',
         startOfLine: false,
         allowSpaces: true,
