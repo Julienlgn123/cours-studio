@@ -80,7 +80,7 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     show: false, frame: false, titleBarStyle: 'hidden', backgroundColor: '#0d0d0f',
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true }
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, plugins: true }
   })
   mainWindow.on('ready-to-show', () => mainWindow.show())
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })

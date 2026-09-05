@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown, FileText, List } from 'lucide-react'
+import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown, FileText, List, BookOpen } from 'lucide-react'
+import type { Attachment } from '../../../shared/types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
@@ -24,6 +25,10 @@ export default function EditorView() {
   const [showImport, setShowImport] = useState(false)
   const [activeTab, setActiveTab] = useState<'editor' | 'versions' | 'media' | 'files'>('editor')
   const [showOutline, setShowOutline] = useState(false)
+  const [showPdf, setShowPdf] = useState(false)
+  const [pdfAtts, setPdfAtts] = useState<Attachment[]>([])
+  const [pdfPath, setPdfPath] = useState('')
+  const [pdfUrl, setPdfUrl] = useState('')
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorAreaRef = useRef<HTMLDivElement | null>(null)
 
@@ -70,6 +75,20 @@ export default function EditorView() {
       setContent(course.content)
     }
   }, [activeCourseId])
+
+  useEffect(() => {
+    if (!showPdf || !activeCourseId) return
+    api.attachments.get(activeCourseId).then((all: Attachment[]) => {
+      const pdfs = all.filter((a) => a.fileName.toLowerCase().endsWith('.pdf'))
+      setPdfAtts(pdfs)
+      setPdfPath((prev) => prev || pdfs[0]?.filePath || '')
+    })
+  }, [showPdf, activeCourseId])
+
+  useEffect(() => {
+    if (!pdfPath) { setPdfUrl(''); return }
+    api.media.url(pdfPath).then(setPdfUrl)
+  }, [pdfPath])
 
   const save = useCallback(async (t: string, c: string) => {
     if (!activeCourseId) return
@@ -197,6 +216,14 @@ export default function EditorView() {
           >
             <List size={15} />
           </button>
+          <button
+            className={`icon-btn ${showPdf ? 'active' : ''}`}
+            onClick={() => setShowPdf((v) => !v)}
+            data-tooltip="Afficher un PDF à côté des notes"
+            data-tooltip-dir="left-down"
+          >
+            <BookOpen size={15} />
+          </button>
           <button className="icon-btn" onClick={exportPdf} data-tooltip="Exporter en PDF" data-tooltip-dir="left-down">
             <FileDown size={15} />
           </button>
@@ -271,6 +298,35 @@ export default function EditorView() {
         {activeTab === 'editor' && (
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+              {showPdf && (
+                <div style={{ width: '45%', minWidth: 320, flexShrink: 0, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>
+                    {pdfAtts.length > 1 ? (
+                      <select
+                        className="field-input"
+                        style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
+                        value={pdfPath}
+                        onChange={(e) => setPdfPath(e.target.value)}
+                      >
+                        {pdfAtts.map((a) => <option key={a.id} value={a.filePath}>{a.fileName}</option>)}
+                      </select>
+                    ) : (
+                      <span style={{ flex: 1, fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {pdfAtts[0]?.fileName ?? 'Aucun PDF joint'}
+                      </span>
+                    )}
+                    <button className="icon-btn" onClick={() => setShowPdf(false)} data-tooltip="Fermer"><ArrowLeft size={14} /></button>
+                  </div>
+                  {pdfUrl ? (
+                    <iframe title="PDF" src={pdfUrl} style={{ flex: 1, border: 'none', background: '#fff' }} />
+                  ) : (
+                    <div className="empty-state" style={{ padding: 24 }}>
+                      <FileUp size={22} style={{ opacity: 0.3 }} />
+                      <div style={{ fontSize: 12.5 }}>Joins un PDF dans l'onglet « Fichiers » pour l'afficher ici.</div>
+                    </div>
+                  )}
+                </div>
+              )}
               {showOutline && (
                 <div style={{
                   width: 220, flexShrink: 0, borderRight: '1px solid var(--border)', overflow: 'auto',

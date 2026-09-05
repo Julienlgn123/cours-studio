@@ -23,12 +23,13 @@ import {
   Heading1, Heading2, Heading3, List, ListOrdered, ListChecks,
   Code, Quote, Minus, Undo, Redo, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Link as LinkIcon, Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
-  Sigma, Keyboard, Palette, Table as TableIcon, Image as ImageIcon, Layers
+  Sigma, Keyboard, Palette, Table as TableIcon, Image as ImageIcon, Layers, PenTool
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { MathInline, MathBlock } from '../editor/math'
 import { Indent } from '../editor/indent'
 import { SlashCommand } from '../editor/slashCommand'
+import { Sketch } from '../editor/sketch'
 import { CourseLink } from '../editor/courseLink'
 import { WikiLink, setWikiCourses } from '../editor/wikiLink'
 import type { WikiItem } from './WikiMenuList'
@@ -87,6 +88,7 @@ export default function Editor({ content, onChange, readOnly = false, onQuickFla
       MathBlock,
       Indent,
       CourseLink,
+      Sketch,
       ...(readOnly ? [] : [SlashCommand, WikiLink])
     ],
     content,
@@ -286,6 +288,12 @@ export default function Editor({ content, onChange, readOnly = false, onQuickFla
           title="Insérer une capture d'écran / image"
         >
           <ImageIcon size={14} />
+        </ToolBtn>
+        <ToolBtn
+          onClick={() => editor.chain().focus().insertContent({ type: 'sketch' }).run()}
+          title="Dessiner un schéma"
+        >
+          <PenTool size={14} />
         </ToolBtn>
 
         <div style={{ position: 'relative' }}>

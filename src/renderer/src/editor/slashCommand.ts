@@ -22,7 +22,8 @@ export const SLASH_ITEMS: SlashItem[] = [
   { title: 'Code', desc: 'Bloc de code', icon: '</>', command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run() },
   { title: 'Séparateur', desc: 'Ligne horizontale', icon: '—', command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHorizontalRule().run() },
   { title: 'Formule (LaTeX)', desc: 'Formule mathématique en ligne', icon: '∑', command: ({ editor, range }) => editor.chain().focus().deleteRange(range).insertContent({ type: 'mathInline', attrs: { latex: '' } }).run() },
-  { title: 'Formule bloc', desc: 'Formule centrée sur sa ligne', icon: '∫', command: ({ editor, range }) => editor.chain().focus().deleteRange(range).insertContent({ type: 'mathBlock', attrs: { latex: '' } }).run() }
+  { title: 'Formule bloc', desc: 'Formule centrée sur sa ligne', icon: '∫', command: ({ editor, range }) => editor.chain().focus().deleteRange(range).insertContent({ type: 'mathBlock', attrs: { latex: '' } }).run() },
+  { title: 'Schéma', desc: 'Zone de dessin à main levée', icon: '✏️', command: ({ editor, range }) => editor.chain().focus().deleteRange(range).insertContent({ type: 'sketch' }).run() }
 ]
 
 export const SlashCommand = Extension.create({
