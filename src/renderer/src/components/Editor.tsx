@@ -24,7 +24,7 @@ import {
   Heading1, Heading2, Heading3, List, ListOrdered, ListChecks,
   Code, Quote, Minus, Undo, Redo, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Link as LinkIcon, Subscript as SubscriptIcon, Superscript as SuperscriptIcon,
-  Sigma, Keyboard, Palette, Table as TableIcon, Image as ImageIcon, Layers, PenTool
+  Sigma, Keyboard, Palette, Table as TableIcon, Image as ImageIcon, Layers, PenTool, HelpCircle
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { MathInline, MathBlock } from '../editor/math'
@@ -43,6 +43,8 @@ interface Props {
   readOnly?: boolean
   // When provided, a toolbar button turns the current selection into a flashcard
   onQuickFlashcard?: (selectedText: string) => void
+  // When provided, a toolbar button asks the AI to explain the current selection
+  onExplainSelection?: (selectedText: string) => void
   // Course list for [[wiki-links]] + handler when one is clicked
   courses?: WikiItem[]
   onNavigateCourse?: (courseId: string) => void
@@ -61,7 +63,7 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-export default function Editor({ content, onChange, readOnly = false, onQuickFlashcard, courses, onNavigateCourse, onStats }: Props) {
+export default function Editor({ content, onChange, readOnly = false, onQuickFlashcard, onExplainSelection, courses, onNavigateCourse, onStats }: Props) {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
 
@@ -338,6 +340,18 @@ export default function Editor({ content, onChange, readOnly = false, onQuickFla
             title="Créer une flashcard depuis la sélection"
           >
             <Layers size={14} />
+          </ToolBtn>
+        )}
+        {onExplainSelection && (
+          <ToolBtn
+            onClick={() => {
+              const { from, to } = editor.state.selection
+              const text = editor.state.doc.textBetween(from, to, ' ').trim()
+              onExplainSelection(text)
+            }}
+            title="Expliquer la sélection simplement (IA)"
+          >
+            <HelpCircle size={14} />
           </ToolBtn>
         )}
 

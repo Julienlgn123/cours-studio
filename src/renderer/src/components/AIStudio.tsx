@@ -13,6 +13,11 @@ interface ImageAttachment { fileName: string; dataUrl: string }
 interface DocAttachment { fileName: string; text: string }
 
 const AI_ACTIONS: { action: AIAction; icon: string; title: string; desc: string }[] = [
+  { action: 'revision_sheet', icon: '📋', title: 'Fiche de révision', desc: 'Synthèse structurée d\'une page' },
+  { action: 'cleanup',    icon: '🧹', title: 'Mettre au propre', desc: 'Notes en vrac → texte clair' },
+  { action: 'gaps',       icon: '🕳️', title: 'Trous à combler', desc: 'Notions citées mais pas expliquées' },
+  { action: 'simplify',   icon: '🎈', title: 'Vulgariser',   desc: 'Expliqué comme si tu avais 15 ans' },
+  { action: 'exam_plan',  icon: '📅', title: 'Planning de révision', desc: 'Calendrier avant un examen' },
   { action: 'improve',    icon: '✨', title: 'Améliorer',   desc: 'Reformule et enrichit le cours' },
   { action: 'summarize',  icon: '📝', title: 'Résumer',     desc: 'Crée un résumé concis' },
   { action: 'explain',    icon: '🧠', title: 'Expliquer',   desc: 'Clarifie les notions complexes' },
@@ -29,7 +34,12 @@ const ACTION_PROMPTS: Record<AIAction, string> = {
   explain:    `Tu es un assistant pédagogique. Identifie les 2-3 notions les plus complexes et explique chacune en 2-3 phrases avec un exemple concret. Bref et direct. Markdown simple.${STRICT_SUFFIX}`,
   reorganize: `Tu es un assistant pédagogique. Réorganise ce cours de façon logique. Corrige les fautes. Garde le même contenu sans l'allonger. Markdown simple (##, ###, -, **).${STRICT_SUFFIX}`,
   merge:      `Tu es un assistant pédagogique. Fusionne ces cours en un seul cohérent. Évite les répétitions. Sois concis. Markdown simple.${STRICT_SUFFIX}`,
-  chat:       ''
+  chat:       '',
+  revision_sheet: `Tu es un assistant pédagogique. Produis une FICHE DE RÉVISION d'une page à partir de ce cours, prête à mémoriser avant un contrôle. Structure : un titre ##, puis des sections ### thématiques. Pour chaque section : les définitions clés en **gras**, les formules/dates/faits à retenir en liste -, et si utile un "⚠️ Piège :" ou "💡 À retenir :". Va à l'essentiel, rien de superflu. Markdown simple, pas de HTML.${STRICT_SUFFIX}`,
+  cleanup:    `Tu es un assistant pédagogique. Ces notes ont été prises à la volée (abréviations, phrases coupées, fautes). Réécris-les en phrases complètes et correctes, en gardant EXACTEMENT les mêmes informations et le même ordre — ne rajoute rien, ne développe pas. Corrige l'orthographe et la grammaire. Markdown simple (##, ###, -, **).${STRICT_SUFFIX}`,
+  gaps:       `Tu es un assistant pédagogique exigeant. Analyse ces notes et liste les notions, termes ou concepts qui sont MENTIONNÉS mais jamais définis ni expliqués — les trous qu'un étudiant devrait combler avant l'examen. Pour chacun : le terme en **gras**, puis une phrase disant ce qui manque. Termine par 2-3 questions que le prof pourrait poser sur ces zones floues. Si les notes sont complètes, dis-le franchement. Markdown simple.${STRICT_SUFFIX}`,
+  simplify:   `Tu es un excellent vulgarisateur. Ré-explique ce cours comme si tu parlais à un élève de 15 ans intelligent mais qui découvre le sujet : phrases courtes, analogies du quotidien, zéro jargon non expliqué. Garde toutes les idées importantes. Markdown simple (##, -, **).${STRICT_SUFFIX}`,
+  exam_plan:  `Tu es un coach de révision. À partir des cours fournis et des contraintes de l'étudiant (date d'examen, temps disponible par jour), construis un PLANNING DE RÉVISION jour par jour jusqu'à l'examen. Pour chaque jour : la date, les cours/chapitres à travailler, le type de travail (lecture active, flashcards, exercices, quiz), et une durée. Répartis la charge, garde le dernier jour pour une révision générale légère, prévois des pauses. Markdown simple : ### par jour, - pour les tâches.${STRICT_SUFFIX}`
 }
 
 function markdownToHtml(md: string): string {
@@ -77,6 +87,9 @@ export default function AIStudio() {
   const [streamError, setStreamError] = useState<string | null>(null)
   const [refineInput, setRefineInput] = useState('')
   const [refining, setRefining] = useState(false)
+  const [examDate, setExamDate] = useState('')
+  const [examHours, setExamHours] = useState('2')
+  const [examReady, setExamReady] = useState(false)
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([])
   const [attachedDocs, setAttachedDocs] = useState<DocAttachment[]>([])
   const [attaching, setAttaching] = useState(false)
@@ -163,7 +176,7 @@ export default function AIStudio() {
     setSteps((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s))
   }
 
-  async function runAction(action: AIAction) {
+  async function runAction(action: AIAction, opts?: { skipExamGate?: boolean }) {
     if (!settings.mistralApiKey) { showToast('Configure ta clé API Mistral dans les paramètres', 'error'); return }
     const hasAttachments = attachedImages.length > 0 || attachedDocs.length > 0
     if (selectedCourseIds.length === 0 && !hasAttachments && action !== 'chat') {
@@ -177,6 +190,8 @@ export default function AIStudio() {
     setStreamError(null)
 
     if (action === 'chat') { setMessages([]); return }
+    // Exam planner needs the date + daily hours first — show the form, run later
+    if (action === 'exam_plan' && !opts?.skipExamGate) return
 
     const primaryCourse = courses.find((c) => c.id === selectedCourseIds[0])
     const actionInfo = AI_ACTIONS.find((a) => a.action === action)!
@@ -213,7 +228,10 @@ export default function AIStudio() {
     updateStep('send', { status: 'active', detail: `${model} · température 0.7` })
 
     const systemPrompt = ACTION_PROMPTS[action]
-    const userMsg = action === 'merge' ? `Voici les cours à fusionner :\n\n${context}` : `Voici le cours :\n\n${context}`
+    const userMsg =
+      action === 'merge' ? `Voici les cours à fusionner :\n\n${context}` :
+      action === 'exam_plan' ? `Contraintes : examen le ${examDate}, environ ${examHours} h de révision disponibles par jour. Nous sommes aujourd'hui le ${new Date().toISOString().slice(0, 10)}.\n\nCours à réviser :\n\n${context}` :
+      `Voici le cours :\n\n${context}`
     const msgs = [{ role: 'system', content: systemPrompt }, { role: 'user', content: buildUserContent(userMsg) }]
 
     await delay(200)
@@ -328,6 +346,7 @@ export default function AIStudio() {
     setSteps([])
     setRefineInput('')
     setRefining(false)
+    setExamReady(false)
   }
 
   const actionInfo = AI_ACTIONS.find((a) => a.action === activeAction)
@@ -532,6 +551,31 @@ export default function AIStudio() {
               </div>
 
               <div style={{ flex: 1, overflow: 'auto', padding: '20px 28px' }}>
+                {activeAction === 'exam_plan' && !examReady && (
+                  <div style={{ maxWidth: 380, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>📅 Planning de révision</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                      {selectedCourseIds.length} cours sélectionné{selectedCourseIds.length > 1 ? 's' : ''}. Donne la date de l'examen et ton temps dispo.
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Date de l'examen</label>
+                      <input type="date" className="field-input" value={examDate} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setExamDate(e.target.value)} />
+                    </div>
+                    <div className="field">
+                      <label className="field-label">Heures de révision par jour</label>
+                      <input type="number" className="field-input" value={examHours} min="0.5" max="12" step="0.5" onChange={(e) => setExamHours(e.target.value)} />
+                    </div>
+                    <button
+                      className="btn btn-primary"
+                      style={{ marginTop: 8 }}
+                      disabled={!examDate || selectedCourseIds.length === 0}
+                      onClick={() => { setExamReady(true); runAction('exam_plan', { skipExamGate: true }) }}
+                    >
+                      Générer le planning
+                    </button>
+                  </div>
+                )}
+
                 {/* Steps */}
                 {steps.length > 0 && (
                   <div style={{ marginBottom: 24 }}>

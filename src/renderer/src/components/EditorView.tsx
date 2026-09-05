@@ -31,7 +31,9 @@ export default function EditorView() {
   const [pdfPath, setPdfPath] = useState('')
   const [pdfUrl, setPdfUrl] = useState('')
   const [stats, setStats] = useState({ words: 0, chars: 0 })
+  const [explain, setExplain] = useState<{ term: string; text: string; loading: boolean } | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const explainCleanup = useRef<(() => void) | null>(null)
   const editorAreaRef = useRef<HTMLDivElement | null>(null)
 
   const numberedHeadings = !!settings.numberedHeadings
@@ -132,6 +134,29 @@ export default function EditorView() {
     const filePath = await api.exportMarkdown({ title, html: content })
     if (filePath) showToast('Markdown exporté : ' + filePath, 'success')
   }
+
+  function explainSelection(text: string) {
+    if (!text) { showToast('Sélectionne d\'abord un mot ou un passage', 'info'); return }
+    if (!settings.mistralApiKey) { showToast('Configure ta clé API Mistral dans les paramètres', 'error'); return }
+    explainCleanup.current?.()
+    setExplain({ term: text.length > 60 ? text.slice(0, 60) + '…' : text, text: '', loading: true })
+    let acc = ''
+    explainCleanup.current = api.ai.stream(
+      {
+        apiKey: settings.mistralApiKey,
+        model: settings.mistralModel || 'open-mistral-7b',
+        messages: [
+          { role: 'system', content: 'Tu expliques simplement, en 2 à 4 phrases courtes, sans jargon, avec une analogie si possible. Réponds en français, en texte brut.' },
+          { role: 'user', content: `Explique de façon simple : « ${text} »\n\nContexte du cours : ${content.replace(/<[^>]+>/g, ' ').slice(0, 1500)}` }
+        ]
+      },
+      (chunk: string) => { acc += chunk; setExplain((e) => e && { ...e, text: acc, loading: true }) },
+      () => setExplain((e) => e && { ...e, loading: false }),
+      (err: string) => { setExplain((e) => e && { ...e, text: 'Erreur : ' + err, loading: false }) }
+    )
+  }
+
+  useEffect(() => () => explainCleanup.current?.(), [])
 
   async function quickFlashcard(text: string) {
     if (!activeCourseId) return
@@ -432,6 +457,7 @@ export default function EditorView() {
                     courses={wikiCourses}
                     onNavigateCourse={navigateToCourse}
                     onStats={setStats}
+                    onExplainSelection={explainSelection}
                   />
                 </div>
               </div>
@@ -473,6 +499,23 @@ export default function EditorView() {
           <AttachmentsPanel courseId={course.id} />
         )}
       </div>
+
+      {explain && (
+        <div style={{
+          position: 'fixed', right: 20, bottom: 20, zIndex: 150, width: 320, maxHeight: '60vh', overflow: 'auto',
+          background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.35)', padding: 14
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent-light)' }}>💡 « {explain.term} »</div>
+            <button className="icon-btn" onClick={() => { explainCleanup.current?.(); setExplain(null) }} style={{ flexShrink: 0 }}>✕</button>
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.6, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap' }}>
+            {explain.text}
+            {explain.loading && <span style={{ display: 'inline-block', width: 2, height: 13, background: 'var(--accent)', marginLeft: 2, verticalAlign: 'middle', animation: 'blink 0.8s step-end infinite' }} />}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

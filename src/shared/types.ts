@@ -88,6 +88,11 @@ export type AIAction =
   | 'reorganize'
   | 'merge'
   | 'chat'
+  | 'revision_sheet'
+  | 'gaps'
+  | 'cleanup'
+  | 'simplify'
+  | 'exam_plan'
 
 export interface QuizQuestion {
   question: string

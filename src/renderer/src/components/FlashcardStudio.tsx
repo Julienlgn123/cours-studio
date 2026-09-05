@@ -68,9 +68,9 @@ export default function FlashcardStudio() {
         messages: [
           {
             role: 'system',
-            content: `Tu génères des flashcards de révision (recto/verso) à partir d'un cours. Réponds UNIQUEMENT avec un JSON valide de cette forme :
-{"cards":[{"front":"question ou terme","back":"réponse ou définition"}]}
-Règles : 8 à 15 cartes, chaque recto est court (question ou terme clé), chaque verso est concis (1-3 phrases). Français.`
+            content: `Tu es un expert en répétition espacée. À partir d'un cours, tu crées UNIQUEMENT les flashcards qui valent vraiment la peine d'être mémorisées : définitions, formules, dates, causes/conséquences, distinctions entre notions proches. Ignore le superflu, les exemples, les transitions.
+Réponds UNIQUEMENT avec un JSON valide : {"cards":[{"front":"question précise","back":"réponse courte"}]}
+Règles : une seule idée testable par carte ; le recto est une vraie question (pas "Parle de X") ; le verso tient en 1-2 phrases ou une formule. Le NOMBRE de cartes dépend de la densité du cours (5 pour un cours léger, jusqu'à 20 pour un cours dense) — ne remplis pas pour atteindre un quota. Français.`
           },
           { role: 'user', content: `Cours : ${course.title}\n\n${text}` }
         ]
