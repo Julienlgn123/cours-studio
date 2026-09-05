@@ -78,8 +78,16 @@
             "x64",
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
+      "artifactName": "Cours-Studio-${version}-${arch}.${ext}",
       "icon": "resources/icon.png",
       "category": "public.app-category.education",
       "hardenedRuntime": false,
