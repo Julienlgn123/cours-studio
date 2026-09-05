@@ -216,7 +216,7 @@ export default function SettingsModal({ onClose }: Props) {
                 <button
                   className="btn btn-primary btn-sm"
                   onClick={() => {
-                    if (api.platform === 'darwin') { api.app.openReleases(); return }
+                    if (api?.platform === 'darwin') { api.app.openReleases(); return }
                     api.app.downloadUpdate(); setUpdateState('downloading')
                   }}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}

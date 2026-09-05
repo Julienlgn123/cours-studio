@@ -48,7 +48,7 @@ export default function UpdatePromptModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const isMac = api.platform === 'darwin'
+  const isMac = api?.platform === 'darwin'
 
   function acceptUpdate() {
     if (isMac) {
