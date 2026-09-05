@@ -105,6 +105,13 @@ export function initDb(): void {
       reps INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS study_sessions (
+      id TEXT PRIMARY KEY,
+      subject_id TEXT,
+      seconds INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `)
 
   // Migration: add emoji column to courses if it doesn't exist yet
@@ -343,6 +350,51 @@ export function reviewFlashcard(id: string, grade: 0 | 1 | 2 | 3): void {
 
 export function deleteFlashcard(id: string): void {
   db.prepare('DELETE FROM flashcards WHERE id = ?').run(id)
+}
+
+// ─── Study sessions (Pomodoro) ───────────────────────────────────────────────
+
+export function logStudySession(subjectId: string | null, seconds: number): void {
+  if (!seconds || seconds < 1) return
+  db.prepare('INSERT INTO study_sessions (id, subject_id, seconds, created_at) VALUES (?, ?, ?, ?)')
+    .run(generateId(), subjectId ?? null, Math.round(seconds), Date.now())
+}
+
+export interface StudyStats {
+  total: number
+  week: number
+  today: number
+  bySubject: Array<{ subjectId: string | null; seconds: number }>
+  byDay: Array<{ day: string; seconds: number }>
+}
+
+export function getStudyStats(): StudyStats {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+
+  const total = (db.prepare('SELECT COALESCE(SUM(seconds), 0) AS s FROM study_sessions').get() as { s: number }).s
+  const week = (db.prepare('SELECT COALESCE(SUM(seconds), 0) AS s FROM study_sessions WHERE created_at >= ?').get(weekAgo) as { s: number }).s
+  const today = (db.prepare('SELECT COALESCE(SUM(seconds), 0) AS s FROM study_sessions WHERE created_at >= ?').get(startOfToday) as { s: number }).s
+
+  const bySubject = (db.prepare(
+    'SELECT subject_id AS subjectId, SUM(seconds) AS seconds FROM study_sessions WHERE created_at >= ? GROUP BY subject_id ORDER BY seconds DESC'
+  ).all(Date.now() - 30 * 24 * 60 * 60 * 1000) as Array<{ subjectId: string | null; seconds: number }>)
+
+  const rows = db.prepare('SELECT seconds, created_at FROM study_sessions WHERE created_at >= ?')
+    .all(Date.now() - 14 * 24 * 60 * 60 * 1000) as Array<{ seconds: number; created_at: number }>
+  const dayMap = new Map<string, number>()
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i)
+    dayMap.set(d.toISOString().slice(0, 10), 0)
+  }
+  for (const r of rows) {
+    const key = new Date(r.created_at).toISOString().slice(0, 10)
+    if (dayMap.has(key)) dayMap.set(key, (dayMap.get(key) ?? 0) + r.seconds)
+  }
+  const byDay = Array.from(dayMap.entries()).map(([day, seconds]) => ({ day, seconds }))
+
+  return { total, week, today, bySubject, byDay }
 }
 
 // ─── Row types & mappers ────────────────────────────────────────────────────

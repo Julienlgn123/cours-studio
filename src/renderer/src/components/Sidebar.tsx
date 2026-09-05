@@ -66,7 +66,7 @@ export default function Sidebar() {
               onClick={() => openSubject(sub.id)}
               onContextMenu={(e) => handleContextMenu(e, sub.id)}
             >
-              {sub.activeSubjectId === sub.id && (
+              {activeSubjectId === sub.id && view === 'subject' && (
                 <div className="sidebar-item-dot" style={{ background: sub.color }} />
               )}
               <span className="sidebar-item-emoji">{sub.emoji}</span>

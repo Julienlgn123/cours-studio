@@ -9,10 +9,11 @@ import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
   getAttachments, createAttachment, deleteAttachment,
   getQuizResults, createQuizResult,
   getFlashcards, getDueFlashcards, getAllDueFlashcards, countAllDueFlashcards,
-  getFlashcardsForExport, createFlashcards, reviewFlashcard, deleteFlashcard } from './db'
+  getFlashcardsForExport, createFlashcards, reviewFlashcard, deleteFlashcard,
+  logStudySession, getStudyStats } from './db'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync, copyFileSync, statSync } from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
-import { pickAndExtractDocument } from './documents'
+import { pickAndExtractDocument, extractArticleFromUrl } from './documents'
 import { exportBackup, importBackup, autoBackup, openBackupsFolder, latestBackupInfo } from './backup'
 import { htmlToMarkdown } from './markdown'
 
@@ -449,6 +450,19 @@ function registerIpc(): void {
       throw new Error(err instanceof Error ? err.message : String(err))
     }
   })
+
+  // Import readable text from a web page
+  ipcMain.handle('documents:importUrl', async (_, url: string) => {
+    try {
+      return await extractArticleFromUrl(url)
+    } catch (err) {
+      throw new Error(err instanceof Error ? err.message : String(err))
+    }
+  })
+
+  // Study sessions (Pomodoro)
+  ipcMain.handle('study:log', (_, subjectId: string | null, seconds: number) => { logStudySession(subjectId, seconds); return true })
+  ipcMain.handle('study:stats', () => getStudyStats())
 
   // Pick one or more images (screenshots, photos of handwritten notes...) and
   // return them as base64 data URLs, ready to send to a vision-capable model

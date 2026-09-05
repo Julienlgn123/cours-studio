@@ -1,4 +1,4 @@
-import { Minus, Square, X, Sparkles, Settings, HelpCircle, Layers, Search } from 'lucide-react'
+import { Sparkles, Settings, HelpCircle, Layers, Search, BarChart3, Timer } from 'lucide-react'
 import { useStore } from '../store'
 import SettingsModal from './SettingsModal'
 import { useState } from 'react'
@@ -7,7 +7,7 @@ import { useState } from 'react'
 const api = (window as any).api
 
 export default function TitleBar() {
-  const { view, setView } = useStore()
+  const { view, setView, pomodoroOpen, togglePomodoro } = useStore()
   const [showSettings, setShowSettings] = useState(false)
 
   return (
@@ -53,6 +53,22 @@ export default function TitleBar() {
             data-tooltip-dir="left-down"
           >
             <HelpCircle size={15} />
+          </button>
+          <button
+            className={`icon-btn ${view === 'stats' ? 'active' : ''}`}
+            onClick={() => setView(view === 'stats' ? 'home' : 'stats')}
+            data-tooltip="Statistiques"
+            data-tooltip-dir="left-down"
+          >
+            <BarChart3 size={15} />
+          </button>
+          <button
+            className={`icon-btn ${pomodoroOpen ? 'active' : ''}`}
+            onClick={togglePomodoro}
+            data-tooltip="Minuteur Pomodoro"
+            data-tooltip-dir="left-down"
+          >
+            <Timer size={15} />
           </button>
           <button
             className="icon-btn"

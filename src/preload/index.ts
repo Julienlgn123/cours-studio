@@ -99,7 +99,17 @@ const api = {
   },
   documents: {
     // Opens a native file picker (pdf/docx/odt/txt) and returns the extracted plain text
-    import: (): Promise<{ fileName: string; text: string } | null> => ipcRenderer.invoke('documents:import')
+    import: (): Promise<{ fileName: string; text: string } | null> => ipcRenderer.invoke('documents:import'),
+    // Fetches a web page and returns its readable text
+    importUrl: (url: string): Promise<{ fileName: string; text: string }> => ipcRenderer.invoke('documents:importUrl', url)
+  },
+  study: {
+    log: (subjectId: string | null, seconds: number): Promise<boolean> => ipcRenderer.invoke('study:log', subjectId, seconds),
+    stats: (): Promise<{
+      total: number; week: number; today: number
+      bySubject: Array<{ subjectId: string | null; seconds: number }>
+      byDay: Array<{ day: string; seconds: number }>
+    }> => ipcRenderer.invoke('study:stats')
   },
   images: {
     // Opens a native file picker for images and returns base64 data URLs

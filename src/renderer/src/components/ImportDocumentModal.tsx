@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Upload, FileText, Clipboard } from 'lucide-react'
+import { X, Upload, FileText, Clipboard, Globe } from 'lucide-react'
 import { textToHtml } from '../utils/text'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -12,12 +12,29 @@ export default function ImportDocumentModal({
   onClose: () => void
   onInsert: (html: string) => void
 }) {
-  const [mode, setMode] = useState<'file' | 'paste'>('file')
+  const [mode, setMode] = useState<'file' | 'paste' | 'url'>('file')
   const [pasted, setPasted] = useState('')
   const [fileText, setFileText] = useState('')
   const [fileName, setFileName] = useState('')
+  const [url, setUrl] = useState('')
+  const [urlText, setUrlText] = useState('')
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState('')
+
+  async function fetchUrl() {
+    if (!url.trim()) return
+    setImporting(true)
+    setError('')
+    try {
+      const result = await api.documents.importUrl(url.trim())
+      setUrlText(result.text)
+      setFileName(result.fileName)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setImporting(false)
+    }
+  }
 
   async function pickFile() {
     setImporting(true)
@@ -36,13 +53,13 @@ export default function ImportDocumentModal({
   }
 
   function insert() {
-    const text = mode === 'file' ? fileText : pasted
+    const text = mode === 'file' ? fileText : mode === 'url' ? urlText : pasted
     if (!text.trim()) return
     onInsert(textToHtml(text))
     onClose()
   }
 
-  const preview = mode === 'file' ? fileText : pasted
+  const preview = mode === 'file' ? fileText : mode === 'url' ? urlText : pasted
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
@@ -59,7 +76,28 @@ export default function ImportDocumentModal({
           <button className={`btn btn-sm ${mode === 'paste' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('paste')}>
             <Clipboard size={13} /> Copier-coller
           </button>
+          <button className={`btn btn-sm ${mode === 'url' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setMode('url')}>
+            <Globe size={13} /> Page web
+          </button>
         </div>
+
+        {mode === 'url' && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <input
+              className="field-input"
+              style={{ flex: 1 }}
+              placeholder="https://exemple.com/article"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') fetchUrl() }}
+            />
+            <button className="btn btn-secondary" onClick={fetchUrl} disabled={importing || !url.trim()}>
+              {importing ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Globe size={14} />}
+              Récupérer
+            </button>
+          </div>
+        )}
+        {mode === 'url' && error && <div style={{ marginTop: -4, marginBottom: 10, fontSize: 12, color: 'var(--danger)' }}>{error}</div>}
 
         {mode === 'file' && (
           <div style={{ marginBottom: 12 }}>

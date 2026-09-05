@@ -12,7 +12,7 @@ import ImportDocumentModal from './ImportDocumentModal'
 import AttachmentsPanel from './AttachmentsPanel'
 
 export default function EditorView() {
-  const { courses, subjects, activeCourseId, setView, updateCourse, deleteCourse, showToast } = useStore()
+  const { courses, subjects, activeCourseId, setView, setActiveCourse, updateCourse, deleteCourse, showToast } = useStore()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const course = courses.find((c) => c.id === activeCourseId)
   const subject = course ? subjects.find((s) => s.id === course.subjectId) : undefined
@@ -44,6 +44,24 @@ export default function EditorView() {
     const nodes = editorAreaRef.current?.querySelectorAll('.ProseMirror h1, .ProseMirror h2, .ProseMirror h3')
     const el = nodes?.[i] as HTMLElement | undefined
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const wikiCourses = useMemo(
+    () => courses.map((c) => ({ id: c.id, title: c.title, emoji: c.emoji ?? '📝' })),
+    [courses]
+  )
+
+  const backlinks = useMemo(
+    () => courses.filter((c) => c.id !== activeCourseId && c.content.includes(`data-course-id="${activeCourseId}"`)),
+    [courses, activeCourseId]
+  )
+
+  function navigateToCourse(id: string) {
+    if (id === activeCourseId) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    save(title, content)
+    setActiveCourse(id)
+    setShowOutline(false)
   }
 
   useEffect(() => {
@@ -277,6 +295,27 @@ export default function EditorView() {
                       <span className="sidebar-item-name" style={{ fontSize: 12.5 }}>{h.text}</span>
                     </div>
                   ))}
+
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '18px 6px 8px' }}>
+                    Rétroliens {backlinks.length > 0 && `(${backlinks.length})`}
+                  </div>
+                  {backlinks.length === 0 && (
+                    <div style={{ padding: '4px 6px', color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+                      Aucun autre cours ne renvoie ici. Tape <code>[[</code> dans un cours pour créer un lien.
+                    </div>
+                  )}
+                  {backlinks.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => navigateToCourse(c.id)}
+                      className="sidebar-item"
+                      style={{ paddingLeft: 6, color: 'var(--text-secondary)' }}
+                      title={c.title}
+                    >
+                      <span style={{ fontSize: 12 }}>{c.emoji ?? '📝'}</span>
+                      <span className="sidebar-item-name" style={{ fontSize: 12.5 }}>{c.title}</span>
+                    </div>
+                  ))}
                 </div>
               )}
               <div ref={editorAreaRef} className="editor-area" style={{ flex: 1, overflow: 'auto', paddingTop: 24 }}>
@@ -287,7 +326,13 @@ export default function EditorView() {
                     onChange={(e) => handleTitleChange(e.target.value)}
                     placeholder="Titre du cours..."
                   />
-                  <Editor content={content} onChange={handleContentChange} onQuickFlashcard={quickFlashcard} />
+                  <Editor
+                    content={content}
+                    onChange={handleContentChange}
+                    onQuickFlashcard={quickFlashcard}
+                    courses={wikiCourses}
+                    onNavigateCourse={navigateToCourse}
+                  />
                 </div>
               </div>
             </div>
@@ -300,7 +345,7 @@ export default function EditorView() {
                 onSaved={(type, path) => {
                   updateCourse(activeCourseId!, type === 'audio' ? { audioPath: path } : { videoPath: path })
                   showToast('Enregistrement sauvegardé', 'success')
-                  if (activeTab !== 'media') setActiveTab('media')
+                  setActiveTab('media')
                 }}
               />
             )}

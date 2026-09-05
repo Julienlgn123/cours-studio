@@ -9,8 +9,10 @@ import EditorView from './components/EditorView'
 import AIStudio from './components/AIStudio'
 import QuizStudio from './components/QuizStudio'
 import FlashcardStudio from './components/FlashcardStudio'
+import StatsView from './components/StatsView'
 import Toast from './components/Toast'
 import AIBanner from './components/AIBanner'
+import PomodoroWidget from './components/PomodoroWidget'
 import UpdatePromptModal from './components/UpdatePromptModal'
 import GlobalSearchModal from './components/GlobalSearchModal'
 
@@ -96,6 +98,12 @@ export default function App() {
                 <FlashcardStudio />
               </motion.div>
             )}
+            {view === 'stats' && (
+              <motion.div key="stats" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+                initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+                <StatsView />
+              </motion.div>
+            )}
           </AnimatePresence>
         </main>
       </div>
@@ -103,6 +111,7 @@ export default function App() {
         {toast && <Toast key="toast" />}
       </AnimatePresence>
       <UpdatePromptModal />
+      <PomodoroWidget />
       {showSearch && <GlobalSearchModal onClose={() => setShowSearch(false)} />}
     </div>
   )

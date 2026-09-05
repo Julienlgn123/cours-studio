@@ -29,6 +29,9 @@ import { useEffect, useState } from 'react'
 import { MathInline, MathBlock } from '../editor/math'
 import { Indent } from '../editor/indent'
 import { SlashCommand } from '../editor/slashCommand'
+import { CourseLink } from '../editor/courseLink'
+import { WikiLink, setWikiCourses } from '../editor/wikiLink'
+import type { WikiItem } from './WikiMenuList'
 import ShortcutsModal from './ShortcutsModal'
 
 interface Props {
@@ -37,6 +40,9 @@ interface Props {
   readOnly?: boolean
   // When provided, a toolbar button turns the current selection into a flashcard
   onQuickFlashcard?: (selectedText: string) => void
+  // Course list for [[wiki-links]] + handler when one is clicked
+  courses?: WikiItem[]
+  onNavigateCourse?: (courseId: string) => void
 }
 
 const TEXT_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9', '#e5e7eb']
@@ -50,9 +56,11 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-export default function Editor({ content, onChange, readOnly = false, onQuickFlashcard }: Props) {
+export default function Editor({ content, onChange, readOnly = false, onQuickFlashcard, courses, onNavigateCourse }: Props) {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
+
+  if (courses) setWikiCourses(courses)
 
   const editor = useEditor({
     extensions: [
@@ -78,7 +86,8 @@ export default function Editor({ content, onChange, readOnly = false, onQuickFla
       MathInline,
       MathBlock,
       Indent,
-      ...(readOnly ? [] : [SlashCommand])
+      CourseLink,
+      ...(readOnly ? [] : [SlashCommand, WikiLink])
     ],
     content,
     editable: !readOnly,
@@ -86,6 +95,13 @@ export default function Editor({ content, onChange, readOnly = false, onQuickFla
       onChange(editor.getHTML())
     },
     editorProps: {
+      handleClickOn: (_view, _pos, node) => {
+        if (node.type.name === 'courseLink' && node.attrs.courseId && onNavigateCourse) {
+          onNavigateCourse(node.attrs.courseId as string)
+          return true
+        }
+        return false
+      },
       handlePaste: (view, event) => {
         const items = Array.from(event.clipboardData?.items ?? [])
         const imageItem = items.find((i) => i.type.startsWith('image/'))
