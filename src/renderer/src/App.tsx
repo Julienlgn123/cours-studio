@@ -12,6 +12,7 @@ import FlashcardStudio from './components/FlashcardStudio'
 import StatsView from './components/StatsView'
 import Toast from './components/Toast'
 import AIBanner from './components/AIBanner'
+import ErrorBoundary from './components/ErrorBoundary'
 import PomodoroWidget from './components/PomodoroWidget'
 import UpdatePromptModal from './components/UpdatePromptModal'
 import GlobalSearchModal from './components/GlobalSearchModal'
@@ -20,7 +21,7 @@ import GlobalSearchModal from './components/GlobalSearchModal'
 const api = (window as any).api
 
 export default function App() {
-  const { view, toast, loadSubjects, loadSettings, loadTags, settings, openGlobalReview } = useStore()
+  const { view, toast, loadSubjects, loadSettings, loadTags, settings, openGlobalReview, setView } = useStore()
   const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
@@ -61,6 +62,7 @@ export default function App() {
       <div className="app-body">
         <Sidebar />
         <main className="main">
+         <ErrorBoundary resetKey={view} onReset={() => setView('home')}>
           <AnimatePresence mode="wait">
             {view === 'home' && (
               <motion.div key="home" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
@@ -105,6 +107,7 @@ export default function App() {
               </motion.div>
             )}
           </AnimatePresence>
+         </ErrorBoundary>
         </main>
       </div>
       <AnimatePresence>

@@ -17,6 +17,8 @@ import { pickAndExtractDocument, extractArticleFromUrl } from './documents'
 import { exportBackup, importBackup, autoBackup, openBackupsFolder, latestBackupInfo } from './backup'
 import { htmlToMarkdown } from './markdown'
 
+const RELEASES_URL = 'https://github.com/Julienlgn123/cours-studio/releases/latest'
+
 // Cross-platform ffmpeg binary name
 const ffmpegBin = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
 
@@ -487,6 +489,12 @@ function registerIpc(): void {
   ipcMain.handle('settings:set', (_, d) => { writeFileSync(settingsPath, JSON.stringify(d, null, 2)); return true })
   ipcMain.handle('app:version', () => app.getVersion())
   ipcMain.handle('update:check', () => { if (app.isPackaged) autoUpdater.checkForUpdates() })
-  ipcMain.handle('update:download', () => { if (app.isPackaged) autoUpdater.downloadUpdate() })
-  ipcMain.handle('update:install', () => { if (app.isPackaged) { autoUpdater.quitAndInstall(false, true) } })
+  ipcMain.handle('update:download', () => {
+    // macOS: ad-hoc signed builds fail Squirrel's signature check, so never try
+    // to self-apply — send people to the Releases page for a manual download.
+    if (process.platform === 'darwin') { shell.openExternal(RELEASES_URL); return }
+    if (app.isPackaged) autoUpdater.downloadUpdate()
+  })
+  ipcMain.handle('update:install', () => { if (app.isPackaged && process.platform !== 'darwin') { autoUpdater.quitAndInstall(false, true) } })
+  ipcMain.handle('update:openReleases', () => { shell.openExternal(RELEASES_URL); return true })
 }

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 const api = {
+  platform: process.platform,
   window: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     maximize: () => ipcRenderer.invoke('window:maximize'),
@@ -127,6 +128,9 @@ const api = {
     notifyReady: () => ipcRenderer.send('renderer:ready'),
     downloadUpdate: () => ipcRenderer.invoke('update:download'),
     installUpdate: () => ipcRenderer.invoke('update:install'),
+    // macOS builds are only ad-hoc signed, so Squirrel can't self-apply an
+    // update — open the Releases page for a manual download instead
+    openReleases: () => ipcRenderer.invoke('update:openReleases'),
     onUpdateAvailable: (cb: (info: { version: string; releaseNotes: string }) => void) => {
       const handler = (_: unknown, info: { version: string; releaseNotes: string }) => cb(info)
       ipcRenderer.on('update:available', handler)

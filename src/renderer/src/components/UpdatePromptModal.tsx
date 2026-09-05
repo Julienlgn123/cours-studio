@@ -48,7 +48,16 @@ export default function UpdatePromptModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const isMac = api.platform === 'darwin'
+
   function acceptUpdate() {
+    if (isMac) {
+      // No Developer ID signature → Squirrel can't self-apply. Manual download.
+      api.app.openReleases()
+      setDismissed(true)
+      setStep('hidden')
+      return
+    }
     setStep('downloading')
     setProgress(0)
     api.app.downloadUpdate()
@@ -89,12 +98,14 @@ export default function UpdatePromptModal() {
               )}
 
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-                Tu veux la mettre à jour maintenant ?
+                {isMac
+                  ? 'Sur macOS, télécharge le nouveau .dmg et glisse l\'app dans Applications.'
+                  : 'Tu veux la mettre à jour maintenant ?'}
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                 <button className="btn btn-secondary" onClick={declineUpdate}>Non merci</button>
                 <button className="btn btn-primary" onClick={acceptUpdate}>
-                  <Download size={14} /> Mettre à jour
+                  <Download size={14} /> {isMac ? 'Ouvrir la page de téléchargement' : 'Mettre à jour'}
                 </button>
               </div>
             </>

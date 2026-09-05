@@ -213,7 +213,14 @@ export default function SettingsModal({ onClose }: Props) {
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent-light)' }}>Mise à jour disponible</div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Version {updateVersion} est disponible</div>
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={() => { api.app.downloadUpdate(); setUpdateState('downloading') }} style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    if (api.platform === 'darwin') { api.app.openReleases(); return }
+                    api.app.downloadUpdate(); setUpdateState('downloading')
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+                >
                   <Download size={13} /> Télécharger
                 </button>
               </div>
