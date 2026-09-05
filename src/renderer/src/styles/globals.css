@@ -731,6 +731,36 @@ button {
 .ProseMirror p { margin-bottom: 0.75em; }
 .ProseMirror p:last-child { margin-bottom: 0; }
 
+/* Callouts */
+.ProseMirror .callout {
+  border-left: 3px solid var(--cl-accent, var(--accent));
+  background: var(--cl-bg, var(--accent-dim));
+  border-radius: 6px;
+  padding: 10px 14px 10px 40px;
+  margin: 0.9em 0;
+  position: relative;
+}
+.ProseMirror .callout > :last-child { margin-bottom: 0; }
+.ProseMirror .callout::before {
+  content: var(--cl-icon, "ℹ️");
+  position: absolute;
+  left: 12px;
+  top: 9px;
+  font-size: 15px;
+}
+.ProseMirror .callout[data-callout="info"]       { --cl-accent: #38bdf8; --cl-bg: rgba(56,189,248,0.10);  --cl-icon: "ℹ️"; }
+.ProseMirror .callout[data-callout="attention"]  { --cl-accent: #fb923c; --cl-bg: rgba(251,146,60,0.10);  --cl-icon: "⚠️"; }
+.ProseMirror .callout[data-callout="definition"] { --cl-accent: #a78bfa; --cl-bg: rgba(167,139,250,0.12); --cl-icon: "📖"; }
+.ProseMirror .callout[data-callout="astuce"]     { --cl-accent: #4ade80; --cl-bg: rgba(74,222,128,0.10);  --cl-icon: "💡"; }
+
+/* Optional automatic heading numbering (toggled per editor) */
+.editor-area.numbered-headings .ProseMirror { counter-reset: h1 h2 h3; }
+.editor-area.numbered-headings .ProseMirror h1 { counter-reset: h2 h3; }
+.editor-area.numbered-headings .ProseMirror h2 { counter-reset: h3; }
+.editor-area.numbered-headings .ProseMirror h1::before { counter-increment: h1; content: counter(h1) ". "; color: var(--text-tertiary); }
+.editor-area.numbered-headings .ProseMirror h2::before { counter-increment: h2; content: counter(h1) "." counter(h2) ". "; color: var(--text-tertiary); }
+.editor-area.numbered-headings .ProseMirror h3::before { counter-increment: h3; content: counter(h1) "." counter(h2) "." counter(h3) ". "; color: var(--text-tertiary); }
+
 .ProseMirror h1 { font-size: 24px; font-weight: 700; margin: 1.2em 0 0.5em; color: var(--text-primary); }
 .ProseMirror h2 { font-size: 20px; font-weight: 600; margin: 1em 0 0.4em; color: var(--text-primary); }
 .ProseMirror h3 { font-size: 17px; font-weight: 600; margin: 0.8em 0 0.3em; color: var(--text-primary); }

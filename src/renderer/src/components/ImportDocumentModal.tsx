@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Upload, FileText, Clipboard, Globe } from 'lucide-react'
-import { textToHtml } from '../utils/text'
+import { textToHtml, markdownToHtml, looksLikeMarkdown } from '../utils/text'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
@@ -20,6 +20,7 @@ export default function ImportDocumentModal({
   const [urlText, setUrlText] = useState('')
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState('')
+  const [asMarkdown, setAsMarkdown] = useState(false)
 
   async function fetchUrl() {
     if (!url.trim()) return
@@ -52,14 +53,18 @@ export default function ImportDocumentModal({
     }
   }
 
+  const preview = mode === 'file' ? fileText : mode === 'url' ? urlText : pasted
+
+  // Auto-tick "Markdown" when the incoming text clearly is Markdown
+  useEffect(() => {
+    if (preview && looksLikeMarkdown(preview)) setAsMarkdown(true)
+  }, [preview])
+
   function insert() {
-    const text = mode === 'file' ? fileText : mode === 'url' ? urlText : pasted
-    if (!text.trim()) return
-    onInsert(textToHtml(text))
+    if (!preview.trim()) return
+    onInsert(asMarkdown ? markdownToHtml(preview) : textToHtml(preview))
     onClose()
   }
-
-  const preview = mode === 'file' ? fileText : mode === 'url' ? urlText : pasted
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
@@ -133,11 +138,17 @@ export default function ImportDocumentModal({
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn btn-secondary" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" onClick={insert} disabled={!preview.trim()}>
-            Ajouter aux notes
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={asMarkdown} onChange={(e) => setAsMarkdown(e.target.checked)} />
+            Interpréter le Markdown (# titres, **gras**, listes…)
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-secondary" onClick={onClose}>Annuler</button>
+            <button className="btn btn-primary" onClick={insert} disabled={!preview.trim()}>
+              Ajouter aux notes
+            </button>
+          </div>
         </div>
       </div>
     </div>

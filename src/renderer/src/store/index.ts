@@ -25,7 +25,8 @@ interface AppStore {
   // When true, the Flashcards view opens straight into the global review session
   flashcardsWantAll: boolean
   pomodoroOpen: boolean
-  settings: { mistralApiKey?: string; mistralModel?: string; theme?: 'dark' | 'light' }
+  focusMode: boolean
+  settings: { mistralApiKey?: string; mistralModel?: string; theme?: 'dark' | 'light'; numberedHeadings?: boolean }
 
   toast: { message: string; type: 'success' | 'error' | 'info' } | null
 
@@ -52,6 +53,7 @@ interface AppStore {
   openGlobalReview: () => void
   clearFlashcardsWantAll: () => void
   togglePomodoro: () => void
+  setFocusMode: (v: boolean) => void
   loadSettings: () => Promise<void>
   saveSettings: (s: AppStore['settings']) => Promise<void>
   showToast: (message: string, type?: 'success' | 'error' | 'info') => void
@@ -78,6 +80,7 @@ export const useStore = create<AppStore>((set, get) => ({
   searchQuery: '',
   flashcardsWantAll: false,
   pomodoroOpen: false,
+  focusMode: false,
   settings: {},
   toast: null,
   aiTask: null,
@@ -164,6 +167,7 @@ export const useStore = create<AppStore>((set, get) => ({
   openGlobalReview: () => set({ flashcardsWantAll: true, view: 'flashcards' }),
   clearFlashcardsWantAll: () => set({ flashcardsWantAll: false }),
   togglePomodoro: () => set((s) => ({ pomodoroOpen: !s.pomodoroOpen })),
+  setFocusMode: (v) => set({ focusMode: v }),
 
   loadSettings: async () => { const settings = await api.settings.get(); set({ settings }) },
   saveSettings: async (settings) => { await api.settings.set(settings); set({ settings }) },

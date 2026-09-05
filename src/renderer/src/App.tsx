@@ -21,7 +21,7 @@ import GlobalSearchModal from './components/GlobalSearchModal'
 const api = (window as any).api
 
 export default function App() {
-  const { view, toast, loadSubjects, loadSettings, loadTags, settings, openGlobalReview, setView } = useStore()
+  const { view, toast, loadSubjects, loadSettings, loadTags, settings, openGlobalReview, setView, focusMode, setFocusMode } = useStore()
   const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
@@ -38,6 +38,11 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', settings.theme === 'light' ? 'light' : 'dark')
   }, [settings.theme])
+
+  // Focus mode only makes sense in the editor
+  useEffect(() => {
+    if (view !== 'editor' && focusMode) setFocusMode(false)
+  }, [view, focusMode, setFocusMode])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -60,7 +65,7 @@ export default function App() {
       <TitleBar />
       <AIBanner />
       <div className="app-body">
-        <Sidebar />
+        {!focusMode && <Sidebar />}
         <main className="main">
          <ErrorBoundary resetKey={view} onReset={() => setView('home')}>
           <AnimatePresence mode="wait">

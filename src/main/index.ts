@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, desktopCapturer, protocol, net, dialog, Notification } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, desktopCapturer, protocol, net, dialog, Notification, Menu, MenuItem } from 'electron'
 import { join, extname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
@@ -82,9 +82,44 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1400, height: 900, minWidth: 900, minHeight: 600,
     show: false, frame: false, titleBarStyle: 'hidden', backgroundColor: '#0d0d0f',
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, plugins: true }
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, plugins: true, spellcheck: true }
   })
   mainWindow.on('ready-to-show', () => mainWindow.show())
+
+  // French (+ English) spell checking with a right-click correction menu
+  try {
+    const ses = mainWindow.webContents.session
+    // macOS uses the OS spellchecker and ignores this; Windows/Linux need it set
+    if (process.platform !== 'darwin') {
+      const avail = ses.availableSpellCheckerLanguages
+      const langs = ['fr', 'en-US'].filter((l) => avail.includes(l))
+      if (langs.length) ses.setSpellCheckerLanguages(langs)
+    }
+  } catch { /* spellcheck is best-effort */ }
+
+  mainWindow.webContents.on('context-menu', (_e, params) => {
+    if (!params.misspelledWord && !params.isEditable) return
+    const menu = new Menu()
+    for (const s of params.dictionarySuggestions) {
+      menu.append(new MenuItem({ label: s, click: () => mainWindow.webContents.replaceMisspelling(s) }))
+    }
+    if (params.misspelledWord) {
+      if (params.dictionarySuggestions.length) menu.append(new MenuItem({ type: 'separator' }))
+      menu.append(new MenuItem({
+        label: 'Ajouter au dictionnaire',
+        click: () => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+      }))
+      menu.append(new MenuItem({ type: 'separator' }))
+    }
+    if (params.isEditable) {
+      menu.append(new MenuItem({ role: 'cut' }))
+      menu.append(new MenuItem({ role: 'copy' }))
+      menu.append(new MenuItem({ role: 'paste' }))
+    } else if (params.selectionText) {
+      menu.append(new MenuItem({ role: 'copy' }))
+    }
+    if (menu.items.length) menu.popup()
+  })
   mainWindow.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' } })
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])

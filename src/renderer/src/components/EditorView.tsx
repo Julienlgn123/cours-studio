@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown, FileText, List, BookOpen } from 'lucide-react'
+import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown, FileText, List, BookOpen, Hash, Maximize2, Minimize2 } from 'lucide-react'
 import type { Attachment } from '../../../shared/types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -13,7 +13,8 @@ import ImportDocumentModal from './ImportDocumentModal'
 import AttachmentsPanel from './AttachmentsPanel'
 
 export default function EditorView() {
-  const { courses, subjects, activeCourseId, setView, setActiveCourse, updateCourse, deleteCourse, showToast } = useStore()
+  const { courses, subjects, activeCourseId, setView, setActiveCourse, updateCourse, deleteCourse, showToast,
+    focusMode, setFocusMode, settings, saveSettings } = useStore()
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const course = courses.find((c) => c.id === activeCourseId)
   const subject = course ? subjects.find((s) => s.id === course.subjectId) : undefined
@@ -29,8 +30,12 @@ export default function EditorView() {
   const [pdfAtts, setPdfAtts] = useState<Attachment[]>([])
   const [pdfPath, setPdfPath] = useState('')
   const [pdfUrl, setPdfUrl] = useState('')
+  const [stats, setStats] = useState({ words: 0, chars: 0 })
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const editorAreaRef = useRef<HTMLDivElement | null>(null)
+
+  const numberedHeadings = !!settings.numberedHeadings
+  const readingMin = Math.max(1, Math.round(stats.words / 200))
 
   const headings = useMemo(() => {
     try {
@@ -150,10 +155,12 @@ export default function EditorView() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); forceSave() }
+      if ((e.ctrlKey || e.metaKey) && e.key === '.') { e.preventDefault(); setFocusMode(!focusMode) }
+      if (e.key === 'Escape' && focusMode) setFocusMode(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [title, content])
+  }, [title, content, focusMode, setFocusMode])
 
   if (!course) return null
 
@@ -161,7 +168,19 @@ export default function EditorView() {
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {focusMode && (
+        <button
+          className="icon-btn"
+          onClick={() => setFocusMode(false)}
+          data-tooltip="Quitter le mode focus (Échap)"
+          data-tooltip-dir="left-down"
+          style={{ position: 'absolute', top: 44, right: 16, zIndex: 50, background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+        >
+          <Minimize2 size={15} />
+        </button>
+      )}
       {/* Header */}
+      {!focusMode && (
       <div className="page-header" style={{ padding: '10px 16px' }}>
         <div className="page-header-left">
           <button className="icon-btn" onClick={goBack} data-tooltip="Retour" data-tooltip-dir="down">
@@ -175,6 +194,11 @@ export default function EditorView() {
           )}
         </div>
         <div className="page-header-right">
+          {stats.words > 0 && (
+            <span style={{ fontSize: 11.5, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
+              {stats.words} mots · {readingMin} min
+            </span>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: saved ? 'var(--text-tertiary)' : 'var(--warning)' }}>
             {saved
               ? <><Check size={12} /> Sauvegardé</>
@@ -224,6 +248,22 @@ export default function EditorView() {
           >
             <BookOpen size={15} />
           </button>
+          <button
+            className={`icon-btn ${numberedHeadings ? 'active' : ''}`}
+            onClick={() => saveSettings({ ...settings, numberedHeadings: !numberedHeadings })}
+            data-tooltip="Numéroter les titres"
+            data-tooltip-dir="left-down"
+          >
+            <Hash size={15} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => setFocusMode(true)}
+            data-tooltip="Mode focus (Ctrl+.)"
+            data-tooltip-dir="left-down"
+          >
+            <Maximize2 size={15} />
+          </button>
           <button className="icon-btn" onClick={exportPdf} data-tooltip="Exporter en PDF" data-tooltip-dir="left-down">
             <FileDown size={15} />
           </button>
@@ -235,6 +275,7 @@ export default function EditorView() {
           </button>
         </div>
       </div>
+      )}
 
       {showImport && (
         <ImportDocumentModal
@@ -270,6 +311,7 @@ export default function EditorView() {
       )}
 
       {/* Tabs */}
+      {!focusMode && (
       <div className="tab-bar">
         <div className={`tab ${activeTab === 'editor' ? 'active' : ''}`} onClick={() => setActiveTab('editor')}>Notes</div>
         <div className={`tab ${activeTab === 'versions' ? 'active' : ''}`} onClick={() => setActiveTab('versions')}>
@@ -292,6 +334,7 @@ export default function EditorView() {
           Fichiers
         </div>
       </div>
+      )}
 
       {/* Content */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>
@@ -374,7 +417,7 @@ export default function EditorView() {
                   ))}
                 </div>
               )}
-              <div ref={editorAreaRef} className="editor-area" style={{ flex: 1, overflow: 'auto', paddingTop: 24 }}>
+              <div ref={editorAreaRef} className={`editor-area ${numberedHeadings ? 'numbered-headings' : ''}`} style={{ flex: 1, overflow: 'auto', paddingTop: focusMode ? 48 : 24 }}>
                 <div style={{ maxWidth: 760, margin: '0 auto', padding: '0 16px' }}>
                   <input
                     className="editor-title-input"
@@ -388,6 +431,7 @@ export default function EditorView() {
                     onQuickFlashcard={quickFlashcard}
                     courses={wikiCourses}
                     onNavigateCourse={navigateToCourse}
+                    onStats={setStats}
                   />
                 </div>
               </div>

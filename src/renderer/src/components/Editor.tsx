@@ -18,6 +18,7 @@ import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import Image from '@tiptap/extension-image'
+import CharacterCount from '@tiptap/extension-character-count'
 import {
   Bold, Italic, UnderlineIcon, Strikethrough, Highlighter,
   Heading1, Heading2, Heading3, List, ListOrdered, ListChecks,
@@ -30,6 +31,7 @@ import { MathInline, MathBlock } from '../editor/math'
 import { Indent } from '../editor/indent'
 import { SlashCommand } from '../editor/slashCommand'
 import { Sketch } from '../editor/sketch'
+import { Callout } from '../editor/callout'
 import { CourseLink } from '../editor/courseLink'
 import { WikiLink, setWikiCourses } from '../editor/wikiLink'
 import type { WikiItem } from './WikiMenuList'
@@ -44,6 +46,8 @@ interface Props {
   // Course list for [[wiki-links]] + handler when one is clicked
   courses?: WikiItem[]
   onNavigateCourse?: (courseId: string) => void
+  // Reports live word/character counts
+  onStats?: (stats: { words: number; chars: number }) => void
 }
 
 const TEXT_COLORS = ['#f87171', '#fb923c', '#facc15', '#4ade80', '#22d3ee', '#818cf8', '#e879f9', '#e5e7eb']
@@ -57,7 +61,7 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-export default function Editor({ content, onChange, readOnly = false, onQuickFlashcard, courses, onNavigateCourse }: Props) {
+export default function Editor({ content, onChange, readOnly = false, onQuickFlashcard, courses, onNavigateCourse, onStats }: Props) {
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [showColorPicker, setShowColorPicker] = useState(false)
 
@@ -89,12 +93,18 @@ export default function Editor({ content, onChange, readOnly = false, onQuickFla
       Indent,
       CourseLink,
       Sketch,
+      Callout,
+      CharacterCount,
       ...(readOnly ? [] : [SlashCommand, WikiLink])
     ],
     content,
     editable: !readOnly,
+    onCreate: ({ editor }) => {
+      onStats?.({ words: editor.storage.characterCount.words(), chars: editor.storage.characterCount.characters() })
+    },
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML())
+      onStats?.({ words: editor.storage.characterCount.words(), chars: editor.storage.characterCount.characters() })
     },
     editorProps: {
       handleClickOn: (_view, _pos, node) => {
