@@ -1,8 +1,7 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Julienlgn123/cours-studio/main/resources/icon.png" width="96" height="96" alt="Cours Studio" />
+  <img src="https://raw.githubusercontent.com/Julienlgn123/cours-studio/main/banner.png" alt="Cours Studio" width="100%" />
 </p>
 
-<h1 align="center">Cours Studio</h1>
 <p align="center">Prise et gestion de cours en local : éditeur riche, résumés/QCM par IA, enregistrement audio.</p>
 
 <p align="center">
