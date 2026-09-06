@@ -34,27 +34,13 @@
 
 ---
 
-## Démarrage
+## Installation
 
-```bash
-npm install
-npm run dev
-```
+Cours Studio s'installe et se met à jour directement depuis
+[**Open Studio**](https://github.com/Julienlgn123/open-studio) : télécharge sa
+dernière release, puis choisis Cours Studio dans son catalogue — téléchargement,
+installation et mises à jour se font depuis là, en un clic.
 
-Build & packaging :
-
-```bash
-npm run build         # compile main + preload + renderer dans out/
-npm run dist          # installeur Windows (nsis + portable) -> dist-installer/
-npm run dist:mac      # dmg + zip (x64 + arm64)
-npm run dist:linux    # AppImage + deb
-```
-
-### Builds multi-plateformes (CI)
-
-Un workflow GitHub Actions (`.github/workflows/release.yml`) compile automatiquement
-l'app sur les trois OS à chaque tag `v*`, et publie les artefacts en *GitHub Release*.
-
-> **Apps non signées** : sans certificat développeur (payant), macOS affichera un
+> **App non signée** : sans certificat développeur (payant), macOS affichera un
 > avertissement Gatekeeper et Windows un avertissement SmartScreen à la première
 > ouverture. C'est normal pour un build indé.
