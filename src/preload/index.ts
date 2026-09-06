@@ -47,7 +47,8 @@ const api = {
     export: (): Promise<string | null> => ipcRenderer.invoke('backup:export'),
     import: (): Promise<boolean> => ipcRenderer.invoke('backup:import'),
     openFolder: (): Promise<boolean> => ipcRenderer.invoke('backup:openFolder'),
-    latest: (): Promise<{ name: string; at: number } | null> => ipcRenderer.invoke('backup:latest')
+    latest: (): Promise<{ name: string; at: number } | null> => ipcRenderer.invoke('backup:latest'),
+    resetAll: (): Promise<boolean> => ipcRenderer.invoke('backup:resetAll')
   },
   quizResults: {
     get: () => ipcRenderer.invoke('quizResults:get'),
@@ -57,10 +58,16 @@ const api = {
     get: (courseId: string) => ipcRenderer.invoke('flashcards:get', courseId),
     due: (courseId: string) => ipcRenderer.invoke('flashcards:due', courseId),
     dueAll: () => ipcRenderer.invoke('flashcards:dueAll'),
+    dueByTag: (tagId: string) => ipcRenderer.invoke('flashcards:dueByTag', tagId),
+    forecast: (): Promise<{ fresh: number; learning: number; mature: number; avgEase: number; dueByDay: Array<{ day: string; count: number }> }> => ipcRenderer.invoke('flashcards:forecast'),
     create: (courseId: string, cards: { front: string; back: string }[]) => ipcRenderer.invoke('flashcards:create', courseId, cards),
     review: (id: string, grade: 0 | 1 | 2 | 3) => ipcRenderer.invoke('flashcards:review', id, grade),
     delete: (id: string) => ipcRenderer.invoke('flashcards:delete', id),
-    exportAnki: (courseId?: string): Promise<{ filePath: string; count: number } | null> => ipcRenderer.invoke('flashcards:exportAnki', courseId)
+    exportAnki: (courseId?: string): Promise<{ filePath: string; count: number } | null> => ipcRenderer.invoke('flashcards:exportAnki', courseId),
+    importText: (courseId: string): Promise<{ count: number } | null> => ipcRenderer.invoke('flashcards:importText', courseId)
+  },
+  review: {
+    stats: (): Promise<{ streak: number; today: number; total: number; last14: Array<{ day: string; count: number }> }> => ipcRenderer.invoke('review:stats')
   },
   transcribe: (data: { apiKey: string; filePath: string }): Promise<string> => ipcRenderer.invoke('ai:transcribe', data),
   recording: {

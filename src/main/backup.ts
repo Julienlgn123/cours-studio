@@ -145,6 +145,33 @@ export function autoBackup(): void {
   } catch { /* auto-backup must never block startup */ }
 }
 
+// ─── Suppression totale : remet l'app à zéro (cours, médias, réglages) ─────────
+export function resetAllData(window: BrowserWindow): Promise<boolean> {
+  return dialog
+    .showMessageBox(window, {
+      type: 'warning',
+      buttons: ['Annuler', 'Tout supprimer'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Supprimer toutes les données',
+      message: 'Supprimer définitivement tous tes cours, médias et réglages ?',
+      detail:
+        "Action irréversible — aucune copie n'est gardée. Pense à exporter une sauvegarde " +
+        "avant si tu n'es pas sûr. L'application va redémarrer, vide."
+    })
+    .then(({ response }) => {
+      if (response !== 1) return false
+      closeDb()
+      for (const entry of [...DATA_ENTRIES, 'backups']) {
+        const abs = join(userData(), entry)
+        if (existsSync(abs)) rmSync(abs, { recursive: true, force: true })
+      }
+      app.relaunch()
+      app.exit(0)
+      return true
+    })
+}
+
 export function openBackupsFolder(): void {
   shell.openPath(getBackupsDir())
 }

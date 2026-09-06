@@ -10,11 +10,12 @@ import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
   getQuizResults, createQuizResult,
   getFlashcards, getDueFlashcards, getAllDueFlashcards, countAllDueFlashcards,
   getFlashcardsForExport, createFlashcards, reviewFlashcard, deleteFlashcard,
+  getDueFlashcardsByTag, getReviewStats, getFlashcardForecast,
   logStudySession, getStudyStats } from './db'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync, chmodSync, copyFileSync, statSync } from 'fs'
 import ffmpeg from 'fluent-ffmpeg'
 import { pickAndExtractDocument, extractArticleFromUrl } from './documents'
-import { exportBackup, importBackup, autoBackup, openBackupsFolder, latestBackupInfo } from './backup'
+import { exportBackup, importBackup, autoBackup, openBackupsFolder, latestBackupInfo, resetAllData } from './backup'
 import { htmlToMarkdown } from './markdown'
 
 const RELEASES_URL = 'https://github.com/Julienlgn123/cours-studio/releases/latest'
@@ -143,20 +144,36 @@ app.whenReady().then(() => {
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 
-  // Nudge the user if flashcards are waiting to be reviewed
-  try {
-    const due = countAllDueFlashcards()
-    if (due > 0 && Notification.isSupported()) {
-      const n = new Notification({
-        title: 'Cours Studio — révisions',
-        body: `${due} flashcard${due > 1 ? 's' : ''} à réviser aujourd'hui.`
-      })
-      n.on('click', () => {
-        if (mainWindow) { mainWindow.show(); mainWindow.webContents.send('open-review-all') }
-      })
-      n.show()
-    }
-  } catch { /* notifications are best-effort */ }
+  function notifyDue(due: number): void {
+    if (due <= 0 || !Notification.isSupported()) return
+    const n = new Notification({
+      title: 'Cours Studio — révisions',
+      body: `${due} flashcard${due > 1 ? 's' : ''} à réviser${due > 1 ? '' : ''}.`
+    })
+    n.on('click', () => {
+      if (mainWindow) { mainWindow.show(); mainWindow.webContents.send('open-review-all') }
+    })
+    n.show()
+  }
+
+  // Nudge the user at startup if flashcards are waiting
+  try { notifyDue(countAllDueFlashcards()) } catch { /* best-effort */ }
+
+  // Scheduled daily reminder at settings.reminderTime ("HH:MM"), once per day
+  let lastReminderDay = ''
+  setInterval(() => {
+    try {
+      const s = JSON.parse(readFileSync(join(app.getPath('userData'), 'settings.json'), 'utf-8')) as { reminderTime?: string }
+      if (!s.reminderTime) return
+      const now = new Date()
+      const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+      const today = now.toISOString().slice(0, 10)
+      if (hhmm === s.reminderTime && lastReminderDay !== today) {
+        lastReminderDay = today
+        notifyDue(countAllDueFlashcards())
+      }
+    } catch { /* ignore */ }
+  }, 30_000)
 
   // Auto-updater (only when packaged)
   if (app.isPackaged) {
@@ -263,6 +280,40 @@ function registerIpc(): void {
   ipcMain.handle('flashcards:get', (_, courseId) => getFlashcards(courseId))
   ipcMain.handle('flashcards:due', (_, courseId) => getDueFlashcards(courseId))
   ipcMain.handle('flashcards:dueAll', () => getAllDueFlashcards())
+  ipcMain.handle('flashcards:dueByTag', (_, tagId: string) => getDueFlashcardsByTag(tagId))
+  ipcMain.handle('flashcards:forecast', () => getFlashcardForecast())
+  ipcMain.handle('review:stats', () => getReviewStats())
+
+  // Import an Anki "Notes in Plain Text" export (.txt / .csv / .tsv) into a course
+  ipcMain.handle('flashcards:importText', async (_, courseId: string) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Importer un paquet Anki (texte)',
+      properties: ['openFile'],
+      filters: [{ name: 'Export Anki', extensions: ['txt', 'csv', 'tsv'] }]
+    })
+    if (canceled || filePaths.length === 0) return null
+    const raw = readFileSync(filePaths[0], 'utf-8')
+    let sep = '\t'
+    const sepLine = raw.match(/^#separator:(.+)$/m)?.[1]?.trim().toLowerCase()
+    if (sepLine === 'comma' || sepLine === ',') sep = ','
+    else if (sepLine === 'semicolon' || sepLine === ';') sep = ';'
+    else if (sepLine === 'tab' || sepLine === '\\t') sep = '\t'
+    else if (!raw.includes('\t') && raw.includes(';')) sep = ';'
+    else if (!raw.includes('\t') && raw.includes(',')) sep = ','
+
+    const cards: { front: string; back: string }[] = []
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line.trim() || line.startsWith('#')) continue
+      const parts = line.split(sep)
+      if (parts.length < 2) continue
+      const front = parts[0].replace(/^"|"$/g, '').replace(/<br\s*\/?>/gi, '\n').trim()
+      const back = parts[1].replace(/^"|"$/g, '').replace(/<br\s*\/?>/gi, '\n').trim()
+      if (front && back) cards.push({ front, back })
+    }
+    if (!cards.length) throw new Error('Aucune carte trouvée dans ce fichier.')
+    createFlashcards(courseId, cards)
+    return { count: cards.length }
+  })
   ipcMain.handle('flashcards:create', (_, courseId, cards) => createFlashcards(courseId, cards))
   ipcMain.handle('flashcards:review', (_, id, grade) => { reviewFlashcard(id, grade); return true })
   ipcMain.handle('flashcards:delete', (_, id) => { deleteFlashcard(id); return true })
@@ -478,6 +529,7 @@ function registerIpc(): void {
   ipcMain.handle('backup:import', () => importBackup(mainWindow))
   ipcMain.handle('backup:openFolder', () => { openBackupsFolder(); return true })
   ipcMain.handle('backup:latest', () => latestBackupInfo())
+  ipcMain.handle('backup:resetAll', () => resetAllData(mainWindow))
 
   // Document import: pick a file (pdf/docx/odt/txt) and extract its plain text
   ipcMain.handle('documents:import', async () => {

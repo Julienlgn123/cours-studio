@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Eye, EyeOff, Download, RefreshCw, CheckCircle, Sun, Moon, Upload, FolderOpen, Save } from 'lucide-react'
+import { X, Eye, EyeOff, Download, RefreshCw, CheckCircle, Sun, Moon, Upload, FolderOpen, Save, Trash2 } from 'lucide-react'
 import { useStore } from '../store'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
@@ -21,7 +21,7 @@ export default function SettingsModal({ onClose }: Props) {
   const [saving, setSaving] = useState(false)
 
   const [appVersion, setAppVersion] = useState<string>('')
-  const [backupBusy, setBackupBusy] = useState<'' | 'export' | 'import'>('')
+  const [backupBusy, setBackupBusy] = useState<'' | 'export' | 'import' | 'reset'>('')
   const [lastBackup, setLastBackup] = useState<{ name: string; at: number } | null>(null)
   const [updateState, setUpdateState] = useState<UpdateState>('idle')
   const [updateVersion, setUpdateVersion] = useState<string>('')
@@ -76,6 +76,18 @@ export default function SettingsModal({ onClose }: Props) {
     try {
       await api.backup.import()
       // On success the app relaunches; if we get here the user cancelled
+    } catch (err) {
+      showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
+    } finally {
+      setBackupBusy('')
+    }
+  }
+
+  async function handleResetAll() {
+    setBackupBusy('reset')
+    try {
+      await api.backup.resetAll()
+      // Succès -> l'app relance vide. Si on arrive ici, l'utilisateur a annulé.
     } catch (err) {
       showToast('Erreur : ' + (err instanceof Error ? err.message : String(err)), 'error')
     } finally {
@@ -254,6 +266,26 @@ export default function SettingsModal({ onClose }: Props) {
                 Erreur : {updateError || 'Impossible de vérifier les mises à jour.'}
               </div>
             )}
+          </div>
+
+          {/* Zone dangereuse */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, marginTop: 4 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2, color: 'var(--danger)' }}>
+              Zone dangereuse
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 10 }}>
+              Supprime définitivement tous tes cours, médias et réglages sur cet ordinateur.
+              Exporte une sauvegarde avant si tu comptes réinstaller sur un autre PC.
+            </div>
+            <button
+              className="btn btn-sm"
+              onClick={handleResetAll}
+              disabled={backupBusy !== ''}
+              style={{ background: 'var(--danger-dim)', color: 'var(--danger)', border: '1px solid rgba(248,113,113,0.2)' }}
+            >
+              {backupBusy === 'reset' ? <span className="spinner" style={{ width: 13, height: 13 }} /> : <Trash2 size={13} />}
+              Supprimer toutes mes données
+            </button>
           </div>
         </div>
 
