@@ -44,3 +44,24 @@ installation et mises à jour se font depuis là, en un clic.
 > **App non signée** : sans certificat développeur (payant), macOS affichera un
 > avertissement Gatekeeper et Windows un avertissement SmartScreen à la première
 > ouverture. C'est normal pour un build indé.
+
+### macOS : « Cours Studio est endommagée et ne peut pas être ouverte »
+
+Cours Studio n'a pas de certificat Apple Developer payant : la build macOS
+n'est signée qu'en *ad-hoc*. Une fois le `.dmg` téléchargé, macOS met l'app en
+quarantaine et Gatekeeper refuse de l'ouvrir en affichant **« Cours Studio est
+endommagée et ne peut pas être ouverte »** — le classique clic droit → **Ouvrir**
+ne suffit pas ici, contrairement à une app juste non-notariée (avec un vrai
+certificat Developer ID).
+
+Pour la débloquer (gratuit, à faire une seule fois) :
+
+1. Glisse `Cours Studio.app` dans `/Applications` (obligatoire : impossible de
+   modifier l'app tant qu'elle est encore dans le `.dmg`, en lecture seule).
+2. Retire l'attribut de quarantaine, au choix :
+   - double-clique `Fix-macOS-Signature.command` (fourni dans le `.dmg`), ou
+   - ouvre Terminal et lance :
+     ```bash
+     xattr -cr "/Applications/Cours Studio.app"
+     ```
+3. Ouvre Cours Studio normalement.
