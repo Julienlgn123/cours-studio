@@ -18,7 +18,6 @@ function inline(html: string): string {
       .replace(/<(strong|b)>([\s\S]*?)<\/\1>/gi, '**$2**')
       .replace(/<(em|i)>([\s\S]*?)<\/\1>/gi, '*$2*')
       .replace(/<s>([\s\S]*?)<\/s>/gi, '~~$1~~')
-      .replace(/<u>([\s\S]*?)<\/u>/gi, '$1')
       .replace(/<mark>([\s\S]*?)<\/mark>/gi, '==$1==')
       .replace(/<code>([\s\S]*?)<\/code>/gi, '`$1`')
       .replace(/<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, '[$2]($1)')
@@ -29,8 +28,36 @@ function inline(html: string): string {
   ).trim()
 }
 
+// Elements with no lossless CommonMark equivalent (colored text, underline,
+// tables — including any colored/formatted content inside table cells) are
+// kept verbatim as embedded raw HTML instead of being flattened, so that
+// re-importing the exported .md in Cours Studio (markdownToHtml, see
+// src/renderer/src/utils/text.ts) reconstructs an identical document.
+// Placeholders use \0 (never appears in HTML/text) so they pass untouched
+// through every other regex pass below.
+function protectRawHtml(html: string, blocks: string[]): string {
+  return html
+    .replace(/<table[\s\S]*?<\/table>/gi, (m) => {
+      blocks.push(m)
+      return `\n\n\0RAWHTML${blocks.length - 1}\0\n\n`
+    })
+    .replace(/<span[^>]*\sstyle="[^"]*color[^"]*"[^>]*>[\s\S]*?<\/span>/gi, (m) => {
+      blocks.push(m)
+      return `\0RAWHTML${blocks.length - 1}\0`
+    })
+    .replace(/<u>[\s\S]*?<\/u>/gi, (m) => {
+      blocks.push(m)
+      return `\0RAWHTML${blocks.length - 1}\0`
+    })
+}
+
+function restoreRawHtml(md: string, blocks: string[]): string {
+  return md.replace(/\0RAWHTML(\d+)\0/g, (_m, i) => blocks[Number(i)])
+}
+
 export function htmlToMarkdown(html: string): string {
-  let md = html
+  const rawBlocks: string[] = []
+  let md = protectRawHtml(html, rawBlocks)
   // math nodes rendered by the editor carry the source in data-latex
   md = md.replace(/<[^>]*data-latex="([^"]*)"[^>]*>[\s\S]*?<\/[^>]+>/gi, (_m, latex) => `$${decodeEntities(latex)}$`)
 
@@ -73,5 +100,6 @@ export function htmlToMarkdown(html: string): string {
   // strip anything left, decode, tidy whitespace
   md = inline(md)
   md = md.replace(/\n{3,}/g, '\n\n').trim()
+  md = restoreRawHtml(md, rawBlocks)
   return md
 }

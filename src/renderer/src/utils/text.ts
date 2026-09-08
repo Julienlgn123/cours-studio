@@ -11,17 +11,46 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// Inline markdown → HTML (bold, italic, code, links). Run on already-escaped text.
+// Inline markdown → HTML (bold, italic, code, links, highlight). Run on already-escaped text.
 function inlineMd(s: string): string {
   return s
     .replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/==([^=]+)==/g, '<mark>$1</mark>')
     .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>')
 }
 
+// Cours Studio's own exporter (src/main/markdown.ts) embeds colored text,
+// underline and tables as verbatim raw HTML (no lossless CommonMark
+// equivalent exists for them). Pull those blocks out before line-by-line
+// parsing/escaping so they survive untouched, then splice the exact same
+// HTML back in — this is what makes "export then re-import" reconstruct an
+// identical course instead of silently dropping colors/tables.
+function extractRawHtml(md: string, blocks: string[]): string {
+  return md
+    .replace(/<table[\s\S]*?<\/table>/gi, (m) => {
+      blocks.push(m)
+      return `\n\n\0RAWHTML${blocks.length - 1}\0\n\n`
+    })
+    .replace(/<span[^>]*\sstyle="[^"]*color[^"]*"[^>]*>[\s\S]*?<\/span>/gi, (m) => {
+      blocks.push(m)
+      return `\0RAWHTML${blocks.length - 1}\0`
+    })
+    .replace(/<u>[\s\S]*?<\/u>/gi, (m) => {
+      blocks.push(m)
+      return `\0RAWHTML${blocks.length - 1}\0`
+    })
+}
+
+function restoreRawHtml(html: string, blocks: string[]): string {
+  return html.replace(/\0RAWHTML(\d+)\0/g, (_m, i) => blocks[Number(i)])
+}
+
 // Small block-level Markdown → HTML converter for imported text.
-export function markdownToHtml(md: string): string {
+export function markdownToHtml(rawMd: string): string {
+  const rawBlocks: string[] = []
+  const md = extractRawHtml(rawMd, rawBlocks)
   const lines = md.replace(/\r\n/g, '\n').split('\n')
   const out: string[] = []
   let inList: 'ul' | 'ol' | null = null
@@ -39,6 +68,14 @@ export function markdownToHtml(md: string): string {
       continue
     }
     if (inCode) { codeBuf.push(line); continue }
+
+    // A raw HTML block (table) protected by extractRawHtml sits alone on its
+    // own line — emit it as-is, not wrapped in a <p>.
+    if (/^\0RAWHTML\d+\0$/.test(line.trim())) {
+      closeList()
+      out.push(line.trim())
+      continue
+    }
 
     const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) {
@@ -74,7 +111,7 @@ export function markdownToHtml(md: string): string {
   }
   if (inCode) out.push(`<pre><code>${esc(codeBuf.join('\n'))}</code></pre>`)
   closeList()
-  return out.join('\n')
+  return restoreRawHtml(out.join('\n'), rawBlocks)
 }
 
 // Heuristic: does this text look like Markdown?
