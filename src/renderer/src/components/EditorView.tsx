@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown, FileText, List, BookOpen, Hash, Maximize2, Minimize2 } from 'lucide-react'
+import { ArrowLeft, Save, History, Mic, Check, Trash2, FileUp, FileDown, FileText, List, BookOpen, Hash, Maximize2, Minimize2, ImagePlus, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { Attachment } from '../../../shared/types'
+import { getPdfPageCount, renderPdfPageToDataUrl } from '../lib/pdfPage'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const api = (window as any).api
@@ -30,6 +31,9 @@ export default function EditorView() {
   const [pdfAtts, setPdfAtts] = useState<Attachment[]>([])
   const [pdfPath, setPdfPath] = useState('')
   const [pdfUrl, setPdfUrl] = useState('')
+  const [pdfPageCount, setPdfPageCount] = useState(0)
+  const [pdfPageNum, setPdfPageNum] = useState(1)
+  const [extractingPage, setExtractingPage] = useState(false)
   const [stats, setStats] = useState({ words: 0, chars: 0 })
   const [explain, setExplain] = useState<{ term: string; text: string; loading: boolean } | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -96,6 +100,29 @@ export default function EditorView() {
     if (!pdfPath) { setPdfUrl(''); return }
     api.media.url(pdfPath).then(setPdfUrl)
   }, [pdfPath])
+
+  useEffect(() => {
+    if (!pdfUrl) { setPdfPageCount(0); return }
+    setPdfPageNum(1)
+    getPdfPageCount(pdfUrl).then(setPdfPageCount).catch(() => setPdfPageCount(0))
+  }, [pdfUrl])
+
+  async function insertPdfPageAsImage() {
+    if (!pdfUrl || extractingPage) return
+    setExtractingPage(true)
+    try {
+      const dataUrl = await renderPdfPageToDataUrl(pdfUrl, pdfPageNum)
+      const img = `<p><img src="${dataUrl}" alt="Page ${pdfPageNum} du PDF" /></p>`
+      const newContent = content ? `${content}\n${img}` : img
+      setContent(newContent)
+      scheduleAutoSave(title, newContent)
+      showToast(`Page ${pdfPageNum} insérée dans le cours`, 'success')
+    } catch {
+      showToast("Impossible d'extraire cette page du PDF", 'error')
+    } finally {
+      setExtractingPage(false)
+    }
+  }
 
   const save = useCallback(async (t: string, c: string) => {
     if (!activeCourseId) return
@@ -385,6 +412,45 @@ export default function EditorView() {
                     )}
                     <button className="icon-btn" onClick={() => setShowPdf(false)} data-tooltip="Fermer"><ArrowLeft size={14} /></button>
                   </div>
+                  {pdfUrl && pdfPageCount > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--border)' }}>
+                      <button
+                        className="icon-btn"
+                        style={{ width: 22, height: 22 }}
+                        disabled={pdfPageNum <= 1}
+                        onClick={() => setPdfPageNum((n) => Math.max(1, n - 1))}
+                        data-tooltip="Page précédente"
+                      >
+                        <ChevronLeft size={13} />
+                      </button>
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        Page {pdfPageNum} / {pdfPageCount}
+                      </span>
+                      <button
+                        className="icon-btn"
+                        style={{ width: 22, height: 22 }}
+                        disabled={pdfPageNum >= pdfPageCount}
+                        onClick={() => setPdfPageNum((n) => Math.min(pdfPageCount, n + 1))}
+                        data-tooltip="Page suivante"
+                      >
+                        <ChevronRight size={13} />
+                      </button>
+                      <button
+                        className="btn btn-sm btn-secondary"
+                        style={{ marginLeft: 'auto' }}
+                        onClick={insertPdfPageAsImage}
+                        disabled={extractingPage}
+                        data-tooltip="Insérer cette page comme image dans le cours"
+                      >
+                        {extractingPage ? (
+                          <div className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                        ) : (
+                          <ImagePlus size={13} />
+                        )}
+                        Insérer la page
+                      </button>
+                    </div>
+                  )}
                   {pdfUrl ? (
                     <iframe title="PDF" src={pdfUrl} style={{ flex: 1, border: 'none', background: '#fff' }} />
                   ) : (

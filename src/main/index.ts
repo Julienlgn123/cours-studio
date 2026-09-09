@@ -1,5 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, desktopCapturer, protocol, net, dialog, Notification, Menu, MenuItem } from 'electron'
-import { join, extname } from 'path'
+import { join, extname, dirname } from 'path'
+import { pathToFileURL } from 'url'
+import { tmpdir } from 'os'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { autoUpdater } from 'electron-updater'
 import { initDb, getSubjects, createSubject, updateSubject, deleteSubject,
@@ -431,6 +433,27 @@ function registerIpc(): void {
     return data.choices[0]?.message?.content ?? ''
   })
 
+  // KaTeX bakes math into <span> soup that relies entirely on katex.min.css
+  // for glyph positioning (fractions, radicals, sub/superscripts) — without
+  // it, exported formulas render as unstyled, misplaced text. Read once and
+  // cache: it's a static file bundled with the app, never changes at runtime.
+  let katexCssForExport: string | null = null
+  function getKatexCssForExport(): string {
+    if (katexCssForExport !== null) return katexCssForExport
+    try {
+      const cssPath = require.resolve('katex/dist/katex.min.css')
+      const fontsDir = pathToFileURL(join(dirname(cssPath), 'fonts') + '/').href
+      // Font URLs are relative ("fonts/KaTeX_Main-Regular.woff2") in the
+      // original file, which only resolves from katex's own dist/ folder.
+      // Rewritten to absolute file:// URLs so they still work once this CSS
+      // is inlined into a temp HTML page elsewhere on disk.
+      katexCssForExport = readFileSync(cssPath, 'utf-8').replace(/url\(fonts\//g, `url(${fontsDir}`)
+    } catch {
+      katexCssForExport = '' // KaTeX not resolvable (shouldn't happen) — export still works, just unstyled math.
+    }
+    return katexCssForExport
+  }
+
   // Export a course to PDF: render its HTML in a hidden window, then print to PDF
   ipcMain.handle('export:pdf', async (_, { title, html }: { title: string; html: string }) => {
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
@@ -443,6 +466,7 @@ function registerIpc(): void {
     const printWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: false } })
     const page = `<!DOCTYPE html><html><head><meta charset="utf-8">
       <style>
+        ${getKatexCssForExport()}
         body { font-family: -apple-system, Segoe UI, Arial, sans-serif; color: #111; padding: 32px 40px; line-height: 1.6; }
         h1 { font-size: 22px; margin-bottom: 18px; }
         h2 { font-size: 17px; margin-top: 22px; }
@@ -453,10 +477,20 @@ function registerIpc(): void {
         .katex-display { margin: 12px 0; }
       </style>
       </head><body><h1>${title.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</h1>${html}</body></html>`
-    await printWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(page))
-    const buffer = await printWindow.webContents.printToPDF({ printBackground: true, pageSize: 'A4' })
-    printWindow.destroy()
-    writeFileSync(filePath, buffer)
+    // Loaded as a real file:// page (not a data: URL): the katex.min.css
+    // above references its fonts via absolute file:// URLs, and a data:
+    // document's opaque origin blocks those cross-origin font loads —
+    // file:// to file:// subresource loads are unrestricted.
+    const tempPath = join(tmpdir(), `cours-studio-export-${Date.now()}-${Math.random().toString(36).slice(2)}.html`)
+    writeFileSync(tempPath, page, 'utf-8')
+    try {
+      await printWindow.loadFile(tempPath)
+      const buffer = await printWindow.webContents.printToPDF({ printBackground: true, pageSize: 'A4' })
+      writeFileSync(filePath, buffer)
+    } finally {
+      printWindow.destroy()
+      unlinkSync(tempPath)
+    }
     return filePath
   })
 
